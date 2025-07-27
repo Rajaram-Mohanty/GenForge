@@ -1,10 +1,10 @@
 {
   "name": "day05",
+  "type": "module",
   "version": "1.0.0",
   "description": "",
   "license": "ISC",
   "author": "",
-  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,6 +12,7 @@
   "dependencies": {
     "@google/genai": "^1.7.0",
     "child_process": "^1.0.2",
+    "express": "^5.1.0",
     "os": "^0.1.2",
     "readline-sync": "^1.4.10",
     "util": "^0.12.5"

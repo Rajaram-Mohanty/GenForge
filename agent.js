@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import readlineSync from 'readline-sync';
 import { exec } from "child_process";
 import { promisify } from "util";
-import os from 'os'
+import os from 'os';
 import fs from "fs";
 import path from "path";
 
@@ -11,7 +11,7 @@ const platform = os.platform();
 const asyncExecute = promisify(exec);
 
 const History = [];
-const ai = new GoogleGenAI({ apiKey: "AIzaSyCxXZVA9km7Z76kDTuBXarK7Ccu2lRJKX4" });
+const ai = new GoogleGenAI({ apiKey: "AIzaSyCzaa8c9nuFpavVa-8SJjxKACluw9Ynfuw" });
 
 
 async function executeCommand({ command }) {
