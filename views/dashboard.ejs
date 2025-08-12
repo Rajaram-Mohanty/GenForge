@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar dashboard-nav">
+        <div class="nav-container">
+            <div class="options">
+                <div class="nav-logo">
+                    <h3>GenForge</h3>
+                </div>
+                <!-- Chat/Menu Icon -->
+                <div class="nav-chats" id="chatMenuBtn" style="cursor:pointer; margin-left: 1rem; position: relative; top: 2.5px;">
+                    <i class="fas fa-bars fa-lg"></i>
+                </div>
+            </div>
+            <div class="nav-api-key" id="apiKeyBtn" style="cursor:pointer; margin-left: 1rem; position: relative; top: 2.5px;">
+                <i class="fas fa-key fa-lg"></i>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Chat Sidebar (hidden by default) -->
+    <div id="chatSidebar" class="sidebar-hidden" style="position:fixed; top:0; left:0; width:20%; height:100%; background:#1e293b; color:#fff; box-shadow:2px 0 8px rgba(0,0,0,0.2); z-index:1000; padding:1rem;">
+        <div class="sidebar-content">
+            <div class="sidebar-header">
+                <h3><i class="fas fa-folder-open"></i> Your Projects</h3>
+                <button id="closeSidebar" class="sidebar-close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <ul id="chatList">
+                <li>No projects yet.</li>
+            </ul>
+        </div>
+        <div class="nav-menu">
+            <form action="/logout" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-outline">Logout</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard-container" id="dashboardContainer">
+        <!-- Initial Dashboard Header -->
+        <div class="dashboard-header" id="dashboardHeader">
+                <h1>Build amazing applications with AI assistance</h1>            
+            <!-- Prompt Input Section -->
+            <div class="prompt-section" id="promptSection">
+                <div class="prompt-input-container">
+                    <input 
+                        type="text" 
+                        id="promptInput" 
+                        class="prompt-input-field" 
+                        placeholder="Enter your application prompt here..."
+                        maxlength="500"
+                    >
+                    <button 
+                        type="button" 
+                        id="submitPrompt" 
+                        class="btn btn-primary prompt-submit-btn"
+                    >
+                        <i class="fas fa-rocket"></i>
+                        Build App
+                    </button>
+                </div>
+                <div class="prompt-examples">
+                    <p>Try: "Create a todo app with React" or "Build a weather dashboard"</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Split Container (hidden by default) - Replaces dashboard header -->
+        <div class="split-container" id="splitContainer">
+            
+                <%- include('left-panel') %>
+           
+            
+                <%- include('right-panel') %>
+            
+        </div>
+    </div>
+
+    <!-- API Key Modal -->
+    <div id="apiKeyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Update API Key</h3>
+                <span class="close" id="closeApiKeyModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Please enter your new Gemini API key:</p>
+                <input type="text" id="apiKeyInput" placeholder="Enter your API key here..." />
+                <div class="modal-actions">
+                    <button id="updateApiKeyBtn" class="btn btn-primary">Update API Key</button>
+                    <button id="cancelApiKeyBtn" class="btn btn-outline">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="errorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Error</h3>
+                <span class="close" id="closeErrorModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="errorMessage"></p>
+                <div class="modal-actions">
+                    <button id="updateApiKeyFromErrorBtn" class="btn btn-primary">Update API Key</button>
+                    <button id="closeErrorBtn" class="btn btn-outline">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

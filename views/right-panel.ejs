@@ -1,0 +1,199 @@
+<!-- Right Panel Content -->
+<div class="right-panel" id="rightPanel">
+    
+    <div class="options-bar">
+        <div class="files-option-button" style="cursor:pointer; margin-left: 1rem; position: relative; top: 2.5px;">
+            <i class="fas fa-bars fa-lg"></i>
+        </div>
+
+        <div class="options-title"> Code Editor </div>
+    </div>
+    
+    <!-- File Sidebar (hidden by default) -->
+    <div id="fileSidebar" class="file-sidebar file-sidebar-hidden">
+        <div class="file-sidebar-header">
+            <h3>Files</h3>
+            <button class="file-sidebar-close-btn" id="closeFileSidebar" title="Close Sidebar">&times;</button>
+        </div>
+        <div class="file-list" id="fileList">
+            <!-- Files will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- Monaco Editor Container -->
+    <div id="monacoEditorContainer" class="monaco-editor-container">
+        <div id="monacoEditor"></div>
+    </div>
+</div>
+
+<!-- Monaco Editor CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script>
+    // Global variables for current project
+    let currentProjectId = null;
+    let currentFiles = {};
+    
+    // Sidebar logic
+    const filesBtn = document.querySelector('.files-option-button');
+    const sidebar = document.getElementById('fileSidebar');
+    const closeSidebarBtn = document.getElementById('closeFileSidebar');
+    const fileList = document.getElementById('fileList');
+    const monacoEditorContainer = document.getElementById('monacoEditorContainer');
+
+    filesBtn.addEventListener('click', function() {
+        sidebar.classList.remove('file-sidebar-hidden');
+        sidebar.classList.add('file-sidebar-visible');
+        monacoEditorContainer.classList.add('editor-with-sidebar');
+    });
+    
+    closeSidebarBtn.addEventListener('click', function() {
+        sidebar.classList.add('file-sidebar-hidden');
+        sidebar.classList.remove('file-sidebar-visible');
+        monacoEditorContainer.classList.remove('editor-with-sidebar');
+    });
+    
+    // Function to update file list
+    function updateFileList(files) {
+        fileList.innerHTML = '';
+        currentFiles = {};
+        
+        files.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.setAttribute('data-file', file.path);
+            fileItem.innerHTML = `<span>${file.name}</span>`;
+            
+            fileItem.addEventListener('click', function() {
+                setActiveFile(file.path);
+                loadFileContent(file.path);
+            });
+            
+            fileList.appendChild(fileItem);
+            currentFiles[file.path] = file;
+        });
+        
+        // Set first file as active if available
+        if (files.length > 0) {
+            setActiveFile(files[0].path);
+            loadFileContent(files[0].path);
+        }
+    }
+    
+    // Function to set active file
+    function setActiveFile(filePath) {
+        const fileItems = document.querySelectorAll('.file-item');
+        fileItems.forEach(item => {
+            if(item.getAttribute('data-file') === filePath) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+    
+    // Function to load file content
+    function loadFileContent(filePath) {
+        if (!currentProjectId || !currentFiles[filePath]) return;
+        
+        const file = currentFiles[filePath];
+        
+        if (window.monacoEditor) {
+            window.monacoEditor.setValue(file.content);
+            monaco.editor.setModelLanguage(window.monacoEditor.getModel(), file.language);
+            
+            // Track current file path for auto-sync
+            if (window.monacoEditor.onDidChangeModelContent) {
+                // Access the closure variables from the Monaco initialization
+                // We'll use a global variable approach for simplicity
+                window.currentEditingFilePath = filePath;
+            }
+        }
+    }
+
+    // Function to sync changes back to virtual file system
+    function syncChangesToVirtualFS(filePath, newContent) {
+        if (!currentProjectId) return;
+        
+        fetch(`/api/update-file/${currentProjectId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                filePath: filePath,
+                content: newContent
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update local file cache
+                if (currentFiles[filePath]) {
+                    currentFiles[filePath].content = newContent;
+                }
+                console.log('✅ Changes synced to virtual file system');
+            } else {
+                console.error('❌ Failed to sync changes:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error syncing changes:', error);
+        });
+    }
+    
+    // Function to initialize project files
+    function initializeProject(projectId, files) {
+        currentProjectId = projectId;
+        window.currentProjectId = projectId; // Set global for Monaco editor
+        updateFileList(files);
+        
+        // Show sidebar by default when project is loaded
+        sidebar.classList.remove('file-sidebar-hidden');
+        sidebar.classList.add('file-sidebar-visible');
+        monacoEditorContainer.classList.add('editor-with-sidebar');
+    }
+    
+    // Monaco Editor initialization
+    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+    require(['vs/editor/editor.main'], function() {
+        window.monacoEditor = monaco.editor.create(document.getElementById('monacoEditor'), {
+            value: '// Your code will appear here...',
+            language: 'plaintext',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            minimap: { enabled: true },
+            fontSize: 14,
+            lineNumbers: 'on',
+            roundedSelection: false,
+            scrollBeyondLastLine: false,
+            readOnly: false,
+            cursorStyle: 'line',
+            scrollbar: {
+                vertical: 'visible',
+                horizontal: 'visible'
+            }
+        });
+        
+        // Add change listener to auto-sync changes
+        let syncTimeout = null;
+        
+        window.monacoEditor.onDidChangeModelContent(function() {
+            if (window.currentEditingFilePath && window.currentProjectId) {
+                // Debounce sync to avoid too many API calls
+                clearTimeout(syncTimeout);
+                syncTimeout = setTimeout(() => {
+                    const newContent = window.monacoEditor.getValue();
+                    syncChangesToVirtualFS(window.currentEditingFilePath, newContent);
+                }, 1000); // Sync after 1 second of no changes
+            }
+        });
+        
+        window.addEventListener('resize', function() {
+            window.monacoEditor.layout();
+        });
+    });
+    
+    // Make functions globally available
+    window.initializeProject = initializeProject;
+    window.updateFileList = updateFileList;
+</script> 

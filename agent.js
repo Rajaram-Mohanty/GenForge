@@ -1,61 +1,103 @@
 import { GoogleGenAI } from "@google/genai";
-import readlineSync from 'readline-sync';
-import { exec } from "child_process";
-import { promisify } from "util";
 import os from 'os';
-import fs from "fs";
-import path from "path";
 
 const platform = os.platform();
 
-const asyncExecute = promisify(exec);
-
 const History = [];
-const ai = new GoogleGenAI({ apiKey: "AIzaSyCzaa8c9nuFpavVa-8SJjxKACluw9Ynfuw" });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "AIzaSyCzaa8c9nuFpavVa-8SJjxKACluw9Ynfuw" });
 
+// Store file operations and messages
+let fileOperations = [];
+let messages = [];
 
 async function executeCommand({ command }) {
   try {
-    // 👇 Check if it's a PowerShell heredoc write command
-    if (
-      platform === "win32" &&
-      command.includes("Set-Content") &&
-      command.includes("@'") &&
-      command.includes("'@")
-    ) {
-      const heredocMatch = command.match(/@'(.*?)'@/s);
-      const fileMatch = command.match(/Set-Content\s+-Path\s+"?(.+?)"?$/);
-
-      if (heredocMatch && fileMatch) {
-        const fileContent = heredocMatch[1];
-        const destPath = fileMatch[1].replace(/\\+/g, "\\");
-
-        // Write to a temp file
-        const tempFilePath = path.join(os.tmpdir(), `temp-${Date.now()}.txt`);
-        fs.writeFileSync(tempFilePath, fileContent, "utf8");
-
-        // PowerShell command to copy from temp to destination
-        const powershellCmd = `powershell -Command "Get-Content '${tempFilePath}' | Set-Content -Path '${destPath}'"`;
-
-        const { stdout, stderr } = await asyncExecute(powershellCmd);
-
-        if (stderr) return `Error: ${stderr}`;
-        return `Success: ${stdout || "Wrote file using temp workaround"} || Task executed completely`;
+    // Parse command to extract file operations (but don't execute actual shell commands)
+    if (command.includes('mkdir')) {
+      const dirMatch = command.match(/mkdir\s+(.+)/);
+      if (dirMatch) {
+        const dirName = dirMatch[1];
+        fileOperations.push({
+          type: 'create_directory',
+          name: dirName,
+          path: dirName
+        });
+        messages.push(`📁 Creating directory: ${dirName}`);
       }
+      return `Success: Directory ${dirMatch ? dirMatch[1] : 'unknown'} would be created`;
+    } else if (command.includes('touch') || command.includes('New-Item')) {
+      const fileMatch = command.match(/(?:touch|New-Item.*-Path)\s+(.+)/);
+      if (fileMatch) {
+        const fileName = fileMatch[1].replace(/['"]/g, '');
+        fileOperations.push({
+          type: 'create_file',
+          name: fileName,
+          path: fileName,
+          content: ''
+        });
+        messages.push(`📄 Creating file: ${fileName}`);
+      }
+      return `Success: File ${fileMatch ? fileMatch[1].replace(/['"]/g, '') : 'unknown'} would be created`;
+    } else if (command.includes('cat <<') || command.includes('Set-Content')) {
+      // Extract file content from cat or Set-Content commands
+      let fileName = '';
+      let content = '';
+      
+      if (command.includes('cat <<')) {
+        const fileMatch = command.match(/cat << 'EOF' > (.+)/);
+        if (fileMatch) {
+          fileName = fileMatch[1];
+          // Extract content between cat command and EOF
+          const lines = command.split('\n');
+          const startIndex = lines.findIndex(line => line.includes('cat <<'));
+          const endIndex = lines.findIndex(line => line.trim() === 'EOF');
+          
+          if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+            content = lines.slice(startIndex + 1, endIndex).join('\n');
+          }
+        }
+      } else if (command.includes('Set-Content')) {
+        const fileMatch = command.match(/Set-Content -Path "(.+?)"/);
+        if (fileMatch) {
+          fileName = fileMatch[1];
+          const contentMatch = command.match(/@'([\s\S]*?)'@/);
+          if (contentMatch) {
+            content = contentMatch[1];
+          }
+        }
+      }
+      
+      if (fileName && content) {
+        fileOperations.push({
+          type: 'write_file',
+          name: fileName,
+          path: fileName,
+          content: content
+        });
+        messages.push(`✏️ Writing content to: ${fileName}`);
+      }
+      return `Success: Content would be written to ${fileName || 'unknown file'}`;
+    } else if (command.includes('cat ') && !command.includes('cat <<')) {
+      // Handle cat commands for reading files (validation)
+      const fileMatch = command.match(/cat\s+(.+)/);
+      if (fileMatch) {
+        const fileName = fileMatch[1];
+        messages.push(`📖 Reading file: ${fileName}`);
+      }
+      return `Success: File ${fileMatch ? fileMatch[1] : 'unknown'} would be read`;
+    } else if (command.includes('ls') || command.includes('dir')) {
+      // Handle directory listing commands
+      messages.push(`📋 Listing directory contents`);
+      return `Success: Directory contents would be listed`;
     }
 
-    // 🔁 Fallback: run the original command
-    const { stdout, stderr } = await asyncExecute(command);
-    if (stderr) return `Error: ${stderr}`;
-    return `Success: ${stdout} || Task executed completely`;
+    // For any other commands, just return success without executing
+    return `Success: Command "${command}" would be executed`;
+    
   } catch (error) {
     return `Error: ${error.message || error}`;
   }
 }
-
-
-
-
 
 const executeCommandDeclaration = {
   name: "executeCommand",
@@ -70,31 +112,30 @@ const executeCommandDeclaration = {
     },
     required: ['command']
   }
-
 }
-
 
 const availableTools = {
   executeCommand
 }
 
-
-
 async function runAgent(userProblem) {
+  // Reset file operations and messages for new request
+  fileOperations = [];
+  messages = [];
 
   History.push({
     role: 'user',
     parts: [{ text: userProblem }]
   });
 
-
+  let response;
   while (true) {
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: History,
-      config: {
-        systemInstruction: `You are an expert AI agent specializing in automated frontend web development. Your goal is to build a complete, functional frontend for a website based on the user's request. You operate by executing terminal commands one at a time using the 'executeCommand' tool.
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: History,
+        config: {
+          systemInstruction: `You are an expert AI agent specializing in automated frontend web development. Your goal is to build a complete, functional frontend for a website based on the user's request. You operate by executing terminal commands one at a time using the 'executeCommand' tool.
 
 Your user's operating system is: ${platform}
 
@@ -164,23 +205,29 @@ Unless the user specifies otherwise, follow this plan:
 <-- Final Step -->
 Once all files are created and validated, your final response MUST be a plain text message to the user, summarizing what you did and where the files are located. Do not call any more tools at this point.
 `,
-        tools: [{
-          functionDeclarations: [executeCommandDeclaration]
-        }],
-      },
-    });
-
+          tools: [{
+            functionDeclarations: [executeCommandDeclaration]
+          }],
+        },
+      });
+    } catch (error) {
+      // Handle API errors
+      if (error.message && error.message.includes('quota') || error.message.includes('429')) {
+        throw new Error('API_QUOTA_EXCEEDED');
+      } else if (error.message && error.message.includes('API key')) {
+        throw new Error('INVALID_API_KEY');
+      } else {
+        throw new Error(`API_ERROR: ${error.message}`);
+      }
+    }
 
     if (response.functionCalls && response.functionCalls.length > 0) {
-
       console.log(response.functionCalls);
       const { name, args } = response.functionCalls[0];
 
       const funCall = availableTools[name];
 
-
       const result = await funCall(args);
-
 
       const functionResponsePart = {
         name: name,
@@ -200,7 +247,6 @@ Once all files are created and validated, your final response MUST be a plain te
       });
 
       // result Ko history daalna
-
       History.push({
         role: "user",
         parts: [
@@ -211,29 +257,37 @@ Once all files are created and validated, your final response MUST be a plain te
       });
     }
     else {
-
+      // Add final summary message
+      const finalText = response.text || "Application generated successfully!";
+      messages.push(finalText);
+      
       History.push({
         role: 'model',
-        parts: [{ text: response.text }]
+        parts: [{ text: finalText }]
       })
-      console.log(response.text);
+      console.log(finalText);
       break;
     }
   }
+
+  // Return structured response
+  return {
+    messages: messages,
+    fileOperations: fileOperations,
+    finalMessage: "Application generated successfully!"
+  };
 }
 
-async function main() {
+export default runAgent;
 
-  console.log("I am a cursor: let's create a website");
-  const userProblem = readlineSync.question("Ask me anything--> ");
-  await runAgent(userProblem);
-  main();
-}
+// async function main() {
 
-
-main();
-
+//   console.log("I am a cursor: let's create a website");
+//   const userProblem = readlineSync.question("Ask me anything--> ");
+//   await runAgent(userProblem);
+//   main();
+// }
 
 
-
+// main(); 
 
