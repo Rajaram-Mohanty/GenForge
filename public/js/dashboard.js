@@ -37,7 +37,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const promptInput = document.getElementById('promptInput');
         const promptInputSplit = document.getElementById('promptInputSplit');
         
-        // Add click event to the main submit button to trigger split
+        // Initialize panel divider functionality
+        initializePanelDivider();
+        
+        // Add click event to the main submit button to trigger split and send prompt
         if (submitBtn) {
             submitBtn.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -49,6 +52,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
+                // Clear the input field
+                promptInput.value = '';
+                
                 // Trigger split view
                 activateSplitView();
                 
@@ -59,6 +65,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         promptInputSplit.focus();
                     }
                 }, 300);
+                
+                // Send the prompt to Gemini immediately
+                sendPromptRequest(prompt);
             });
         }
         
@@ -305,6 +314,101 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Function to initialize panel divider functionality
+    function initializePanelDivider() {
+        const divider = document.getElementById('panelDivider');
+        const leftPanel = document.querySelector('.left-panel');
+        const rightPanel = document.querySelector('.right-panel');
+        
+        if (!divider || !leftPanel || !rightPanel) {
+            console.warn('Panel divider elements not found');
+            return;
+        }
+        
+        let isDragging = false;
+        let startX = 0;
+        let startLeftWidth = 0;
+        
+        // Mouse events for dragging
+        divider.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            startX = e.clientX;
+            startLeftWidth = leftPanel.offsetWidth;
+            
+            divider.classList.add('dragging');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - startX;
+            const newLeftWidth = Math.max(300, Math.min(startLeftWidth + deltaX, window.innerWidth * 0.7));
+            
+            leftPanel.style.width = newLeftWidth + 'px';
+            leftPanel.style.flex = 'none';
+            
+            // Ensure right panel takes remaining space
+            rightPanel.style.flex = '1';
+        });
+        
+        document.addEventListener('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                divider.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+        
+        // Touch events for mobile devices
+        divider.addEventListener('touchstart', function(e) {
+            isDragging = true;
+            startX = e.touches[0].clientX;
+            startLeftWidth = leftPanel.offsetWidth;
+            
+            divider.classList.add('dragging');
+            document.body.style.userSelect = 'none';
+            
+            e.preventDefault();
+        });
+        
+        document.addEventListener('touchmove', function(e) {
+            if (!isDragging) return;
+            
+            const deltaX = e.touches[0].clientX - startX;
+            const newLeftWidth = Math.max(300, Math.min(startLeftWidth + deltaX, window.innerWidth * 0.7));
+            
+            leftPanel.style.width = newLeftWidth + 'px';
+            leftPanel.style.flex = 'none';
+            
+            // Ensure right panel takes remaining space
+            rightPanel.style.flex = '1';
+            
+            e.preventDefault();
+        });
+        
+        document.addEventListener('touchend', function() {
+            if (isDragging) {
+                isDragging = false;
+                divider.classList.remove('dragging');
+                document.body.style.userSelect = '';
+            }
+        });
+        
+        // Double-click to reset to default size
+        divider.addEventListener('dblclick', function() {
+            leftPanel.style.width = '';
+            leftPanel.style.flex = '1';
+            rightPanel.style.flex = '1';
+        });
+        
+        console.log('✅ Panel divider initialized');
+    }
+
     // Console message
     console.log(`
     🚀 GenForge Dashboard Ready!
@@ -316,6 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
     - Chat-like message display
     - Virtual file system integration
     - API key management
+    - Draggable panel divider
     
     Start building by entering a prompt in the input field!
     `);

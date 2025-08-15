@@ -2,8 +2,14 @@
 <div class="right-panel" id="rightPanel">
     
     <div class="options-bar">
-        <div class="files-option-button" style="cursor:pointer; margin-left: 1rem; position: relative; top: 2.5px;">
-            <i class="fas fa-bars fa-lg"></i>
+
+        <div class="options-left">
+        <div class="files-option-button" onclick="toggleToEditor()">
+            <i class="fas fa-code fa-lg"></i>
+        </div>
+        <div class="view-toggle-button" onclick="togglePreview()">
+            <i class="fas fa-eye fa-lg"></i>
+        </div>
         </div>
 
         <div class="options-title"> Code Editor </div>
@@ -24,6 +30,8 @@
     <div id="monacoEditorContainer" class="monaco-editor-container">
         <div id="monacoEditor"></div>
     </div>
+    
+    <%- include('preview') %>
 </div>
 
 <!-- Monaco Editor CDN -->
@@ -196,4 +204,218 @@
     // Make functions globally available
     window.initializeProject = initializeProject;
     window.updateFileList = updateFileList;
+    
+    // Preview functionality
+    let isPreviewMode = false;
+    let currentHtmlContent = '';
+    
+    function togglePreview() {
+        const monacoContainer = document.getElementById('monacoEditorContainer');
+        const previewContainer = document.getElementById('previewContainer');
+        
+        if (isPreviewMode) {
+            // Switch back to editor
+            monacoContainer.style.display = 'block';
+            previewContainer.style.display = 'none';
+            isPreviewMode = false;
+            
+            // Update button appearance
+            document.querySelector('.view-toggle-button').classList.remove('active');
+            document.querySelector('.files-option-button').classList.remove('active');
+            
+            // Trigger Monaco editor resize
+            if (window.monacoEditor) {
+                window.monacoEditor.layout();
+            }
+        } else {
+            // Switch to preview
+            monacoContainer.style.display = 'none';
+            previewContainer.style.display = 'block';
+            isPreviewMode = true;
+            
+            // Update button appearance
+            document.querySelector('.view-toggle-button').classList.add('active');
+            document.querySelector('.files-option-button').classList.remove('active');
+            
+            // Initialize preview if we have project data
+            if (currentProjectId && Object.keys(currentFiles).length > 0) {
+                initializePreview();
+            }
+        }
+    }
+    
+    function toggleToEditor() {
+        const monacoContainer = document.getElementById('monacoEditorContainer');
+        const previewContainer = document.getElementById('previewContainer');
+        
+        // Always switch to editor when files button is clicked
+        monacoContainer.style.display = 'block';
+        previewContainer.style.display = 'none';
+        isPreviewMode = false;
+        
+        // Update button appearance
+        document.querySelector('.view-toggle-button').classList.remove('active');
+        document.querySelector('.files-option-button').classList.add('active');
+        
+        // Trigger Monaco editor resize
+        if (window.monacoEditor) {
+            window.monacoEditor.layout();
+        }
+    }
+    
+    function initializePreview() {
+        // Find HTML files
+        const htmlFiles = Object.values(currentFiles).filter(file => 
+            file.name.toLowerCase().endsWith('.html') || 
+            file.name.toLowerCase().endsWith('.htm')
+        );
+        
+        if (htmlFiles.length === 0) {
+            showPreviewError('No HTML files found in this project. Please generate an HTML file first.');
+            return;
+        }
+        
+        // If multiple HTML files, show file selector
+        if (htmlFiles.length > 1) {
+            showFileSelector(htmlFiles);
+        } else {
+            // Single HTML file, load it directly
+            loadHtmlFile(htmlFiles[0]);
+        }
+    }
+    
+    function showFileSelector(htmlFiles) {
+        const fileSelector = document.getElementById('fileSelector');
+        const select = document.getElementById('htmlFileSelect');
+        
+        // Clear existing options
+        select.innerHTML = '<option value="">Select HTML file to preview...</option>';
+        
+        // Add HTML files
+        htmlFiles.forEach(file => {
+            const option = document.createElement('option');
+            option.value = file.path;
+            option.textContent = file.name;
+            select.appendChild(option);
+        });
+        
+        fileSelector.style.display = 'block';
+        
+        // Auto-select first file
+        if (htmlFiles.length > 0) {
+            select.value = htmlFiles[0].path;
+            loadSelectedFile();
+        }
+    }
+    
+    function loadSelectedFile() {
+        const select = document.getElementById('htmlFileSelect');
+        const selectedPath = select.value;
+        
+        if (!selectedPath) return;
+        
+        const selectedFile = currentFiles[selectedPath];
+        if (selectedFile) {
+            loadHtmlFile(selectedFile);
+        }
+    }
+    
+    function loadHtmlFile(file) {
+        showPreviewLoading();
+        
+        // Use the file content directly from our cache
+        if (file.content) {
+            currentHtmlContent = file.content;
+            displayPreview(file.content);
+        } else {
+            // Fallback to fetching from server
+            fetch(`/api/file/${currentProjectId}/${encodeURIComponent(file.path)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.text();
+                })
+                .then(content => {
+                    currentHtmlContent = content;
+                    displayPreview(content);
+                })
+                .catch(error => {
+                    console.error('Error loading file:', error);
+                    showPreviewError(`Failed to load ${file.name}: ${error.message}`);
+                });
+        }
+    }
+    
+    function displayPreview(htmlContent) {
+        const iframe = document.getElementById('previewIframe');
+        const loading = document.getElementById('previewLoading');
+        const error = document.getElementById('previewError');
+        
+        // Hide loading and error
+        loading.style.display = 'none';
+        error.style.display = 'none';
+        
+        // Show iframe
+        iframe.style.display = 'block';
+        
+        // Create a complete HTML document with the content
+        const fullHtml = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>App Preview</title>
+                <style>
+                    /* Reset and base styles */
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: Arial, sans-serif; line-height: 1.6; }
+                </style>
+            </head>
+            <body>
+                ${htmlContent}
+            </body>
+            </html>
+        `;
+        
+        // Write content to iframe
+        iframe.srcdoc = fullHtml;
+    }
+    
+    function showPreviewLoading() {
+        const iframe = document.getElementById('previewIframe');
+        const loading = document.getElementById('previewLoading');
+        const error = document.getElementById('previewError');
+        
+        iframe.style.display = 'none';
+        error.style.display = 'none';
+        loading.style.display = 'block';
+    }
+    
+    function showPreviewError(message) {
+        const iframe = document.getElementById('previewIframe');
+        const loading = document.getElementById('previewLoading');
+        const error = document.getElementById('previewError');
+        const errorMessage = document.getElementById('errorMessage');
+        
+        iframe.style.display = 'none';
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        errorMessage.textContent = message;
+    }
+    
+    function refreshPreview() {
+        if (currentHtmlContent) {
+            displayPreview(currentHtmlContent);
+        }
+    }
+    
+    function openInNewTab() {
+        if (currentHtmlContent) {
+            const blob = new Blob([currentHtmlContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        }
+    }
 </script> 

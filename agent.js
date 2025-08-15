@@ -4,7 +4,11 @@ import os from 'os';
 const platform = os.platform();
 
 const History = [];
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "AIzaSyCzaa8c9nuFpavVa-8SJjxKACluw9Ynfuw" });
+
+// Function to create AI instance with provided API key
+function createAIInstance(apiKey) {
+  return new GoogleGenAI({ apiKey: apiKey });
+}
 
 // Store file operations and messages
 let fileOperations = [];
@@ -118,10 +122,13 @@ const availableTools = {
   executeCommand
 }
 
-async function runAgent(userProblem) {
+async function runAgent(userProblem, apiKey) {
   // Reset file operations and messages for new request
   fileOperations = [];
   messages = [];
+
+  // Create AI instance with provided API key
+  const ai = createAIInstance(apiKey);
 
   History.push({
     role: 'user',

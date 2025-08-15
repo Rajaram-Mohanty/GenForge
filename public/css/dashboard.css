@@ -276,12 +276,80 @@ html, body {
 .left-panel {
     flex: 1;
     background: var(--bg-secondary);
-    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     transition: all 0.5s ease;
     overflow: hidden;
     height: 100%;
+    min-width: 300px;
+    max-width: 70%;
+}
+
+/* Panel Divider */
+.panel-divider {
+    width: 8px;
+    background: var(--bg-primary);
+    cursor: col-resize;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+    z-index: 10;
+}
+
+.panel-divider:hover {
+    background: var(--border-color);
+}
+
+.panel-divider.dragging {
+    background: #3b82f6;
+}
+
+.divider-handle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
+}
+
+.divider-line {
+    width: 2px;
+    height: 40px;
+    background: var(--border-color);
+    border-radius: 1px;
+}
+
+.divider-grip {
+    color: var(--text-secondary);
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.panel-divider:hover .divider-grip {
+    opacity: 1;
+    color: #3b82f6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .left-panel {
+        min-width: 250px;
+        max-width: 60%;
+    }
+    
+    .right-panel {
+        min-width: 300px;
+    }
+    
+    .panel-divider {
+        width: 12px; /* Slightly wider for mobile touch */
+    }
+    
+    .divider-line {
+        height: 30px;
+    }
 }
 
 /* Chat Messages Container */
@@ -378,14 +446,11 @@ html, body {
 .right-panel {
     flex: 1;
     background: var(--bg-primary);
-    /* display: flex;
-    align-items: flex-start;
-    justify-content: center; */
-    /* padding-bottom: 0.5rem; */
     transition: all 0.5s ease;
     overflow: hidden;
     height: 100%;
     position: relative;
+    min-width: 400px;
 }
 
 .options-bar {
@@ -399,6 +464,39 @@ html, body {
     backdrop-filter: blur(10px);
     position: relative;
     overflow: hidden;
+}
+
+.options-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    
+}
+
+.files-option-button,
+.view-toggle-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    color: var(--text-secondary);
+}
+
+.files-option-button:hover,
+.view-toggle-button:hover {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+    transform: translateY(-1px);
+}
+
+.files-option-button:active,
+.view-toggle-button:active {
+    transform: translateY(0);
+    background: rgba(59, 130, 246, 0.3);
 }
 
 
@@ -756,4 +854,140 @@ html, body {
     .editor-with-sidebar {
         margin-left: 80%;
     }
+}
+
+/* Preview Container Styles */
+.preview-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #2d2d30;
+    border-bottom: 1px solid #3e3e42;
+}
+
+.preview-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #cccccc;
+    font-weight: 500;
+}
+
+.preview-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.preview-button {
+    padding: 6px 12px;
+    border: 1px solid #3e3e42;
+    background: #3c3c3c;
+    color: #cccccc;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+}
+
+.preview-button:hover {
+    background: #4c4c4c;
+    border-color: #5a5a5a;
+}
+
+.preview-button.secondary {
+    background: transparent;
+    border-color: #3e3e42;
+}
+
+.preview-button.secondary:hover {
+    background: #3c3c3c;
+}
+
+.file-selector {
+    padding: 12px 16px;
+    background: #2d2d30;
+    border-bottom: 1px solid #3e3e42;
+}
+
+.file-selector select {
+    width: 100%;
+    padding: 8px 12px;
+    background: #3c3c3c;
+    border: 1px solid #3e3e42;
+    color: #cccccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.file-selector select:focus {
+    outline: none;
+    border-color: #007acc;
+}
+
+.preview-content {
+    flex: 1;
+    position: relative;
+    background: #ffffff;
+}
+
+.preview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #666666;
+    font-size: 16px;
+}
+
+.preview-error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #ff6b6b;
+    max-width: 400px;
+}
+
+.preview-error h3 {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.preview-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #ffffff;
+}
+
+/* Active state for view toggle button */
+.view-toggle-button.active {
+    background: #007acc;
+    color: #ffffff;
+}
+
+/* Active state for files option button */
+.files-option-button.active {
+    background: #007acc;
+    color: #ffffff;
 }
