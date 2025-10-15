@@ -1,3 +1,5 @@
+//This the testing file for the agent.js file. Not used in the application.
+
 import { GoogleGenAI } from "@google/genai";
 import readlineSync from 'readline-sync';
 import { exec } from "child_process";
