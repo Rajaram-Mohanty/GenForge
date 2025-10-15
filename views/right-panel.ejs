@@ -182,6 +182,22 @@
             }
         });
         
+        // Helper to append streamed content into the editor, preserving language
+        window.appendToEditor = function(textChunk, language) {
+            if (!window.monacoEditor) return;
+            try {
+                const model = window.monacoEditor.getModel();
+                if (language && model) {
+                    monaco.editor.setModelLanguage(model, language);
+                }
+                const current = window.monacoEditor.getValue();
+                window.monacoEditor.setValue(current + textChunk);
+                window.monacoEditor.revealLine(window.monacoEditor.getModel().getLineCount());
+            } catch (e) {
+                console.error('appendToEditor error:', e);
+            }
+        }
+
         // Add change listener to auto-sync changes
         let syncTimeout = null;
         

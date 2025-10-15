@@ -149,59 +149,50 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add initial message
         addChatMessage(`🚀 Starting to build your application: "${prompt}"`, 'user');
         
-        // Create URL with prompt as query parameter
-        const url = `/api/generate-prompt?prompt=${encodeURIComponent(prompt)}`;
-        
-        // Send POST request
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+        // Non-streaming request to backend
+        fetch(`/api/generate-prompt?prompt=${encodeURIComponent(prompt)}`, {
+            method: 'POST'
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+        .then(async (resp) => {
+            if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                const message = data && data.error ? data.error : `HTTP ${resp.status}`;
+                throw new Error(message);
             }
-            return response.json();
+            return resp.json();
         })
-        .then(data => {
-            console.log('Server response:', data);
-            
-            // Handle successful response
-            if (data.success) {
-                // Display messages from agent
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(message => {
-                        addChatMessage(message, 'agent');
-                    });
-                }
-                
-                // Add final success message
-                addChatMessage(data.finalMessage || '✅ Application generated successfully!', 'success');
-                
-                // Initialize project in right panel
-                if (data.projectStructure && data.projectStructure.files) {
+        .then((data) => {
+            // Render messages and basic summary
+            if (Array.isArray(data.messages)) {
+                data.messages.forEach(m => addChatMessage(m, 'agent'));
+            }
+            addChatMessage('✅ Generation complete.', 'success');
+
+            // Initialize virtual file system in the UI
+            if (data && data.success && data.projectId && data.projectStructure && Array.isArray(data.projectStructure.files)) {
+                try {
                     if (window.initializeProject) {
                         window.initializeProject(data.projectId, data.projectStructure.files);
                     }
-                }
-                
-            } else {
-                // Handle API errors
-                if (data.error === 'API_QUOTA_EXCEEDED' || data.error === 'INVALID_API_KEY') {
-                    handleApiError({ message: data.error });
-                } else {
-                    addChatMessage(`❌ Error: ${data.message || data.error || 'Failed to generate application'}`, 'error');
+                } catch (e) {
+                    console.warn('initializeProject failed:', e);
                 }
             }
+
+            // Optionally reflect file operations in editor if available
+            if (Array.isArray(data.fileOperations) && window.appendToEditor) {
+                // Best-effort: show any text content from write_file ops
+                data.fileOperations.forEach(op => {
+                    if (op && op.type === 'write_file' && typeof op.content === 'string') {
+                        window.appendToEditor(`\n\n${op.content}`, 'plaintext');
+                    }
+                });
+            }
         })
-        .catch(error => {
-            console.error('Error:', error);
-            handleApiError(error);
+        .catch((err) => {
+            handleApiError({ message: String(err && err.message || err) });
         })
         .finally(() => {
-            // Restore button state
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
         });

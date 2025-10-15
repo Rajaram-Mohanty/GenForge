@@ -9,6 +9,7 @@ import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
+import { GoogleGenAI } from '@google/genai';
 
 import runAgent from './agent.js';
 import VirtualFileSystem from './virtual-file-system.js';
@@ -65,7 +66,7 @@ const users = [
 const virtualFileSystem = new VirtualFileSystem();
 
 // Store API key in memory
-let currentApiKey = process.env.GEMINI_API_KEY || "AIzaSyD8HRz-47yPaFm4wwbEeWbibcodRa-B3Rw";
+let currentApiKey = "AIzaSyDNRIR8Tk1DvqbzvYVEpiixgSDOTivvbik" ;              //|| "AIzaSyB-y4Xu0lsU6Fgb1x-qnH34A-IBbdFBdzk"
 
 // Routes
 app.get('/', (req, res) => {
@@ -160,6 +161,8 @@ app.post('/logout', (req, res) => {
   });
 });
 
+// (Removed) Real-time SSE generation endpoint
+
 // API Routes for AI Code Generation
 app.post('/api/generate-prompt', requireAuth, async (req, res) => {
   try {
@@ -183,6 +186,20 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
       ...agentResponse,
       prompt: prompt
     });
+    
+    // Log key parts of the agent response for debugging/visibility
+    try {
+      console.log('Agent response summary:', {
+        messages: agentResponse?.messages,
+        fileOperationsCount: Array.isArray(agentResponse?.fileOperations) ? agentResponse.fileOperations.length : 0,
+        finalMessage: agentResponse?.finalMessage,
+      });
+      if (Array.isArray(agentResponse?.fileOperations) && agentResponse.fileOperations.length > 0) {
+        console.log('Agent file operations (first 10):', agentResponse.fileOperations.slice(0, 10));
+      }
+    } catch (logErr) {
+      console.warn('Failed to log agent response:', logErr);
+    }
     
     res.json({
       success: true,

@@ -11,7 +11,7 @@ const platform = os.platform();
 const asyncExecute = promisify(exec);
 
 const History = [];
-const ai = new GoogleGenAI({ apiKey: "AIzaSyCxXZVA9km7Z76kDTuBXarK7Ccu2lRJKX4" });
+const ai = new GoogleGenAI({ apiKey: "AIzaSyDNRIR8Tk1DvqbzvYVEpiixgSDOTivvbik" });
 
 
 async function executeCommand({ command }) {

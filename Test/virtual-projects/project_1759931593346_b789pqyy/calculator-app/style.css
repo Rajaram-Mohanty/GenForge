@@ -1,0 +1,48 @@
+
+/* Reset global styles */
+*{
+  box-sizing: border-box;
+}
+body{
+  font-family: Arial, sans-serif;
+}
+.calculator{
+  /* Add some margin and padding for spacing */
+  margin: auto;
+  width: 300px;
+  padding: 20px;
+  border: 1px solid #ccc;
+  background-color: white;
+}
+.screen, .button{
+  display: inline-block;
+}
+.screen{
+  /* The screen will take up the majority of the calculator's width */
+  flex: 3;
+  height: 50px;
+  border: none;
+  text-align: right;
+  font-size: 2em;
+  margin-bottom: 10px;
+}
+.buttons{
+  display: grid;
+  /* Make the grid responsive to screen size */
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+.button{
+  height: 35px;
+  border: none;
+  background-color: #f2f2f2;
+  font-size: 1em;
+  cursor: pointer;
+}
+.operator, .zero{
+  /* Operators and zero will be twice as tall */
+  height: 70px;
+}
+.operator{
+  background-color: #ccc;
+}
