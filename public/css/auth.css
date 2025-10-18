@@ -226,31 +226,6 @@
     color: var(--text-muted);
 }
 
-.password-strength {
-    margin-top: 0.75rem;
-}
-
-.strength-bar {
-    height: 3px;
-    background: var(--border-color);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
-}
-
-.strength-bar::after {
-    content: '';
-    display: block;
-    height: 100%;
-    background: var(--primary-gradient);
-    width: 0%;
-    transition: width 0.3s ease;
-}
-
-.strength-text {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
 
 .form-options {
     display: flex;
@@ -308,16 +283,6 @@
     text-decoration: underline;
 }
 
-.terms-link {
-    color: #60a5fa;
-    text-decoration: none;
-    transition: color 0.3s ease;
-}
-
-.terms-link:hover {
-    color: #93c5fd;
-    text-decoration: underline;
-}
 
 .auth-submit {
     width: 100%;

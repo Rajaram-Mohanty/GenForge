@@ -35,55 +35,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Password strength checker
-    const passwordInput = document.getElementById('signup-password');
-    if (passwordInput) {
-        const strengthBar = document.querySelector('.strength-bar');
-        const strengthText = document.querySelector('.strength-text');
-        
-        passwordInput.addEventListener('input', function() {
-            const password = this.value;
-            const strength = calculatePasswordStrength(password);
-            
-            updatePasswordStrength(strength, strengthBar, strengthText);
-        });
-    }
-    
-    function calculatePasswordStrength(password) {
-        let strength = 0;
-        const checks = [
-            password.length >= 6,
-            /[a-z]/.test(password),
-            /[A-Z]/.test(password),
-            /[0-9]/.test(password),
-            /[^A-Za-z0-9]/.test(password)
-        ];
-        
-        strength = checks.filter(Boolean).length;
-        return Math.min(strength, 4);
-    }
-    
-    function updatePasswordStrength(strength, strengthBar, strengthText) {
-        const colors = ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#16a34a'];
-        const texts = [
-            'Very Weak',
-            'Weak',
-            'Fair', 
-            'Good',
-            'Strong'
-        ];
-        
-        if (strengthBar) {
-            strengthBar.style.setProperty('--strength-width', `${(strength / 4) * 100}%`);
-            strengthBar.style.setProperty('--strength-color', colors[strength]);
-            strengthBar.style.background = `linear-gradient(to right, ${colors[strength]} var(--strength-width, 0%), var(--border-color) var(--strength-width, 0%))`;
-        }
-        
-        if (strengthText) {
-            strengthText.textContent = strength > 0 ? texts[strength] : 'Enter a strong password';
-            strengthText.style.color = strength > 0 ? colors[strength] : 'var(--text-muted)';
-        }
-    }
     
     // Form validation
     const forms = document.querySelectorAll('.auth-form');
@@ -121,12 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Check terms checkbox for signup
-        const termsCheckbox = form.querySelector('input[name="terms"]');
-        if (termsCheckbox && !termsCheckbox.checked) {
-            showFormError('Please agree to the Terms of Service and Privacy Policy');
-            isValid = false;
-        }
         
         return isValid;
     }

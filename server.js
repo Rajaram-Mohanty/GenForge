@@ -13,6 +13,7 @@ import { GoogleGenAI } from '@google/genai';
 
 import runAgent from './agent.js';
 import VirtualFileSystem from './virtual-file-system.js';
+import { connectDB, User, Project } from './models/index.js';
 
 dotenv.config();
 
@@ -22,6 +23,9 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 8080;
 const asyncExecute = promisify(exec);
+
+// Connect to MongoDB
+connectDB();
 
 // Set EJS as template engine
 app.set('view engine', 'ejs');
@@ -52,15 +56,7 @@ const requireAuth = (req, res, next) => {
   }
 };
 
-// Temporary user storage (replace with database in production)
-const users = [
-  {
-    id: 1,
-    email: 'demo@genforge.com',
-    password: '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', // secret
-    name: 'Demo User'
-  }
-];
+// Database models are now imported and will be used instead of in-memory storage
 
 // Initialize virtual file system
 const virtualFileSystem = new VirtualFileSystem();
@@ -69,9 +65,17 @@ const virtualFileSystem = new VirtualFileSystem();
 let currentApiKey = "AIzaSyDNRIR8Tk1DvqbzvYVEpiixgSDOTivvbik" ;              //|| "AIzaSyB-y4Xu0lsU6Fgb1x-qnH34A-IBbdFBdzk"
 
 // Routes
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   const isAuthenticated = !!req.session.userId;
-  const user = isAuthenticated ? users.find(u => u.id === req.session.userId) : null;
+  let user = null;
+  
+  if (isAuthenticated) {
+    try {
+      user = await User.findById(req.session.userId);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+    }
+  }
   
   res.render('index', { 
     title: 'GenForge - AI-Powered Development',
@@ -103,53 +107,81 @@ app.get('/signup', (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const user = users.find(u => u.email === email);
-  
-  if (user && await bcrypt.compare(password, user.password)) {
-    req.session.userId = user.id;
-    res.redirect('/dashboard');
-  } else {
+  try {
+    const { email, password } = req.body;
+    
+    // Find user by email
+    const user = await User.findOne({ email: email });
+    
+    if (user && await user.comparePassword(password)) {
+      // Update last login
+      user.lastLogin = new Date();
+      await user.save();
+      
+      req.session.userId = user._id;
+      res.redirect('/dashboard');
+    } else {
+      res.render('auth', { 
+        title: 'Login - GenForge',
+        mode: 'login',
+        error: 'Invalid email or password'
+      });
+    }
+  } catch (error) {
+    console.error('Login error:', error);
     res.render('auth', { 
       title: 'Login - GenForge',
       mode: 'login',
-      error: 'Invalid email or password'
+      error: 'An error occurred during login'
     });
   }
 });
 
 app.post('/signup', async (req, res) => {
-  const { name, email, password } = req.body;
-  
-  // Check if user already exists
-  if (users.find(u => u.email === email)) {
-    return res.render('auth', { 
+  try {
+    const { name, email, password } = req.body;
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email });
+    if (existingUser) {
+      return res.render('auth', { 
+        title: 'Sign Up - GenForge',
+        mode: 'signup',
+        error: 'User with this email already exists'
+      });
+    }
+    
+    // Create new user
+    const newUser = new User({
+      username: name, // Using name as username for now
+      email,
+      password
+    });
+    
+    await newUser.save();
+    req.session.userId = newUser._id;
+    res.redirect('/dashboard');
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.render('auth', { 
       title: 'Sign Up - GenForge',
       mode: 'signup',
-      error: 'User with this email already exists'
+      error: 'An error occurred during signup'
     });
   }
-  
-  // Create new user
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const newUser = {
-    id: users.length + 1,
-    name,
-    email,
-    password: hashedPassword
-  };
-  
-  users.push(newUser);
-  req.session.userId = newUser.id;
-  res.redirect('/dashboard');
 });
 
-app.get('/dashboard', requireAuth, (req, res) => {
-  const user = users.find(u => u.id === req.session.userId);
-  res.render('dashboard', { 
-    title: 'Dashboard - GenForge',
-    user
-  });
+app.get('/dashboard', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    res.render('dashboard', { 
+      title: 'Dashboard - GenForge',
+      user
+    });
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.redirect('/login');
+  }
 });
 
 app.post('/logout', (req, res) => {
@@ -187,6 +219,48 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
       prompt: prompt
     });
     
+    // Create project in database
+    const project = new Project({
+      name: `Project ${new Date().toLocaleDateString()}`,
+      description: prompt,
+      userId: req.session.userId,
+      projectType: 'web-app'
+    });
+
+    // Add initial chat message
+    await project.addChatMessage('user', prompt);
+    
+    // Add all agent messages as assistant messages
+    if (agentResponse.messages && agentResponse.messages.length > 0) {
+      console.log(`📝 Saving ${agentResponse.messages.length} assistant messages to database`);
+      for (const message of agentResponse.messages) {
+        // The messages from agent are simple strings, not objects with role/content
+        await project.addChatMessage('assistant', message);
+        console.log(`✅ Saved assistant message: ${message.substring(0, 100)}...`);
+      }
+    }
+
+    // Add generated files to project
+    if (agentResponse.fileOperations && Array.isArray(agentResponse.fileOperations)) {
+      console.log(`📁 Processing ${agentResponse.fileOperations.length} file operations`);
+      for (const fileOp of agentResponse.fileOperations) {
+        // Check for write_file operations (the actual structure from agent.js)
+        if (fileOp.type === 'write_file' && fileOp.content) {
+          const fileExtension = fileOp.name.split('.').pop() || 'txt';
+          await project.addFile(fileOp.name, fileOp.path, fileOp.content, fileExtension);
+          console.log(`✅ Saved file: ${fileOp.name} (${fileExtension})`);
+        }
+        // Also handle create_file operations
+        else if (fileOp.type === 'create_file' && fileOp.content) {
+          const fileExtension = fileOp.name.split('.').pop() || 'txt';
+          await project.addFile(fileOp.name, fileOp.path, fileOp.content, fileExtension);
+          console.log(`✅ Saved file: ${fileOp.name} (${fileExtension})`);
+        }
+      }
+    }
+
+    await project.save();
+    
     // Log key parts of the agent response for debugging/visibility
     try {
       console.log('Agent response summary:', {
@@ -207,7 +281,8 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
       messages: agentResponse.messages,
       fileOperations: agentResponse.fileOperations,
       finalMessage: agentResponse.finalMessage,
-      projectStructure: projectStructure
+      projectStructure: projectStructure,
+      databaseProjectId: project._id
     });
     
   } catch (error) {
@@ -314,16 +389,236 @@ app.get('/api/download-all', requireAuth, (req, res) => {
 });
 
 // API Routes for future features
-app.get('/api/user', requireAuth, (req, res) => {
-  const user = users.find(u => u.id === req.session.userId);
-  res.json({ 
-    success: true, 
-    user: { 
-      id: user.id, 
-      name: user.name, 
-      email: user.email 
+app.get('/api/user', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.session.userId);
+    res.json({ 
+      success: true, 
+      user: { 
+        id: user._id, 
+        username: user.username, 
+        email: user.email 
+      }
+    });
+  } catch (error) {
+    console.error('User API error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch user data' 
+    });
+  }
+});
+
+// Get user's projects
+app.get('/api/projects', requireAuth, async (req, res) => {
+  try {
+    const projects = await Project.find({ userId: req.session.userId })
+      .sort({ updatedAt: -1 })
+      .select('name description projectType status createdAt updatedAt');
+    
+    res.json({
+      success: true,
+      projects
+    });
+  } catch (error) {
+    console.error('Projects fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch projects'
+    });
+  }
+});
+
+// Get specific project with files and chats
+app.get('/api/project/:projectId', requireAuth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const project = await Project.findOne({ 
+      _id: projectId, 
+      userId: req.session.userId 
+    });
+    
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      project
+    });
+  } catch (error) {
+    console.error('Project fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch project'
+    });
+  }
+});
+
+// Get project data formatted for virtual file system
+app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const project = await Project.findOne({ 
+      _id: projectId, 
+      userId: req.session.userId 
+    });
+    
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
+    // Convert database project to virtual file system format
+    const virtualProjectStructure = {
+      id: project._id.toString(),
+      prompt: project.description || project.name,
+      createdAt: project.createdAt,
+      files: project.files.map(file => ({
+        name: file.filename,
+        path: file.path,
+        content: file.content,
+        type: file.fileType,
+        language: getLanguageFromFileType(file.fileType),
+        extension: `.${file.fileType}`,
+        createdAt: file.createdAt,
+        lastModified: file.lastModified
+      })),
+      directories: getDirectoriesFromFiles(project.files),
+      rootPath: `/project/${project._id}`,
+      // Include chat messages for the chat panel
+      chats: project.chats || [],
+      // Project metadata
+      projectInfo: {
+        name: project.name,
+        description: project.description,
+        projectType: project.projectType,
+        status: project.status,
+        updatedAt: project.updatedAt
+      }
+    };
+    
+    res.json({
+      success: true,
+      projectStructure: virtualProjectStructure
+    });
+  } catch (error) {
+    console.error('Project data fetch error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch project data'
+    });
+  }
+});
+
+// Helper function to determine language from file type
+function getLanguageFromFileType(fileType) {
+  const typeMap = {
+    'html': 'html',
+    'css': 'css',
+    'js': 'javascript',
+    'json': 'json',
+    'md': 'markdown',
+    'py': 'python',
+    'jsx': 'javascript',
+    'tsx': 'javascript',
+    'ts': 'typescript',
+    'txt': 'plaintext'
+  };
+  return typeMap[fileType.toLowerCase()] || 'plaintext';
+}
+
+// Helper function to extract directories from file paths
+function getDirectoriesFromFiles(files) {
+  const directories = new Set();
+  files.forEach(file => {
+    const pathParts = file.path.split('/');
+    for (let i = 1; i < pathParts.length; i++) {
+      const dirPath = pathParts.slice(0, i).join('/');
+      if (dirPath) {
+        directories.add(dirPath);
+      }
     }
   });
+  return Array.from(directories);
+}
+
+// Add chat message to project
+app.post('/api/project/:projectId/chat', requireAuth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { role, content } = req.body;
+    
+    const project = await Project.findOne({ 
+      _id: projectId, 
+      userId: req.session.userId 
+    });
+    
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+    
+    await project.addChatMessage(role, content);
+    
+    res.json({
+      success: true,
+      message: 'Chat message added successfully'
+    });
+  } catch (error) {
+    console.error('Chat add error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add chat message'
+    });
+  }
+});
+
+// Delete project
+app.delete('/api/project/:projectId', requireAuth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    // Find the project and ensure it belongs to the user
+    const project = await Project.findOne({ 
+      _id: projectId, 
+      userId: req.session.userId 
+    });
+    
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+    
+    // Store project name for logging
+    const projectName = project.name;
+    
+    // Delete the project from database
+    await Project.findByIdAndDelete(projectId);
+    
+    console.log(`🗑️ Project "${projectName}" (${projectId}) deleted by user ${req.session.userId}`);
+    
+    res.json({
+      success: true,
+      message: 'Project deleted successfully',
+      projectName: projectName
+    });
+  } catch (error) {
+    console.error('Project delete error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete project'
+    });
+  }
 });
 
 // API key update endpoint
@@ -356,7 +651,7 @@ app.post('/api/update-api-key', requireAuth, (req, res) => {
 });
 
 // Update file content endpoint
-app.post('/api/update-file/:projectId', requireAuth, (req, res) => {
+app.post('/api/update-file/:projectId', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { filePath, content } = req.body;
@@ -368,21 +663,58 @@ app.post('/api/update-file/:projectId', requireAuth, (req, res) => {
       });
     }
 
-    // Sync changes to virtual file system
-    const success = virtualFileSystem.syncFileChanges(projectId, filePath, content);
+    // Check if this is a database project ID (MongoDB ObjectId format)
+    const isDatabaseProject = /^[0-9a-fA-F]{24}$/.test(projectId);
     
-    if (success) {
+    if (isDatabaseProject) {
+      // Update file in database
+      const project = await Project.findOne({ 
+        _id: projectId, 
+        userId: req.session.userId 
+      });
+      
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found'
+        });
+      }
+
+      // Find the file in the project
+      const file = project.files.find(f => f.path === filePath);
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found in project'
+        });
+      }
+
+      // Update file content
+      await project.updateFile(file._id, content);
+      
       res.json({
         success: true,
-        message: 'File updated successfully',
+        message: 'File updated successfully in database',
         filePath: filePath,
         projectId: projectId
       });
     } else {
-      res.status(404).json({
-        success: false,
-        error: 'File not found or update failed'
-      });
+      // Sync changes to virtual file system (for legacy projects)
+      const success = virtualFileSystem.syncFileChanges(projectId, filePath, content);
+      
+      if (success) {
+        res.json({
+          success: true,
+          message: 'File updated successfully in virtual file system',
+          filePath: filePath,
+          projectId: projectId
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'File not found or update failed'
+        });
+      }
     }
     
   } catch (error) {

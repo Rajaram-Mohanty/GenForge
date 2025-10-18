@@ -5,17 +5,22 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeSidebar();
     initializeSplitFunctionality();
     initializeApiKeyModal();
+    fetchAndRenderProjects();
     
     function initializeSidebar() {
         const chatMenuBtn = document.getElementById('chatMenuBtn');
         const chatSidebar = document.getElementById('chatSidebar');
         const closeSidebarBtn = document.getElementById('closeSidebar');
+        const newChatBtn = document.getElementById('newChatBtn');
+        const chatList = document.getElementById('chatList');
         
         if (chatMenuBtn && chatSidebar) {
             chatMenuBtn.addEventListener('click', function() {
                 if (chatSidebar.classList.contains('sidebar-hidden')) {
                     chatSidebar.classList.remove('sidebar-hidden');
                     chatSidebar.classList.add('sidebar-visible');
+                    // Refresh projects when opening the sidebar
+                    fetchAndRenderProjects();
                 } else {
                     chatSidebar.classList.remove('sidebar-visible');
                     chatSidebar.classList.add('sidebar-hidden');
@@ -27,6 +32,45 @@ document.addEventListener('DOMContentLoaded', function() {
             closeSidebarBtn.addEventListener('click', function() {
                 chatSidebar.classList.remove('sidebar-visible');
                 chatSidebar.classList.add('sidebar-hidden');
+            });
+        }
+
+        // New chat button functionality
+        if (newChatBtn) {
+            newChatBtn.addEventListener('click', function() {
+                // Close the sidebar first
+                if (chatSidebar) {
+                    chatSidebar.classList.remove('sidebar-visible');
+                    chatSidebar.classList.add('sidebar-hidden');
+                }
+                
+                // Reset to dashboard view
+                resetToDashboard();
+            });
+        }
+
+        // Project click handling - load project data or delete project
+        if (chatList) {
+            chatList.addEventListener('click', function(e) {
+                // Check if delete button was clicked
+                if (e.target.closest('.delete-project-btn')) {
+                    e.stopPropagation(); // Prevent project loading
+                    const deleteBtn = e.target.closest('.delete-project-btn');
+                    const projectId = deleteBtn.getAttribute('data-project-id');
+                    if (projectId) {
+                        deleteProject(projectId);
+                    }
+                    return;
+                }
+                
+                // Otherwise, load project data
+                const item = e.target.closest('[data-project-id]');
+                if (!item) return;
+                const projectId = item.getAttribute('data-project-id');
+                if (!projectId) return;
+                
+                // Load project data and display in split view
+                loadProjectFromDatabase(projectId);
             });
         }
     }
@@ -261,6 +305,78 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Fetch user's projects and render in sidebar
+    function fetchAndRenderProjects() {
+        const chatList = document.getElementById('chatList');
+        if (!chatList) return;
+        // Temporary loading state
+        chatList.innerHTML = '<li>Loading projects...</li>';
+
+        fetch('/api/projects', { method: 'GET' })
+            .then(async (resp) => {
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    const message = data && data.error ? data.error : `HTTP ${resp.status}`;
+                    throw new Error(message);
+                }
+                return resp.json();
+            })
+            .then((data) => {
+                if (!data || !data.success || !Array.isArray(data.projects)) {
+                    chatList.innerHTML = '<li>Failed to load projects.</li>';
+                    return;
+                }
+                if (data.projects.length === 0) {
+                    chatList.innerHTML = '<li>No projects yet.</li>';
+                    return;
+                }
+                // Render list
+                chatList.innerHTML = '';
+                data.projects.forEach((p) => {
+                    const li = document.createElement('li');
+                    li.setAttribute('data-project-id', p._id || p.id || '');
+                    li.style.cursor = 'pointer';
+                    li.innerHTML = `
+                        <div style="display:flex; align-items:center; gap:0.5rem; width:100%;">
+                            <i class="fas fa-folder"></i>
+                            <div style="display:flex; flex-direction:column; flex:1;">
+                                <span style="font-weight:600;">${escapeHtml(p.name || 'Untitled Project')}</span>
+                                <span style="font-size:0.8rem; opacity:0.8;">${formatDate(p.updatedAt || p.createdAt)}</span>
+                            </div>
+                            <button class="delete-project-btn" data-project-id="${p._id || p.id || ''}" title="Delete Project">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    chatList.appendChild(li);
+                });
+            })
+            .catch((err) => {
+                console.error('Failed to fetch projects:', err);
+                chatList.innerHTML = `<li>Failed to load projects: ${escapeHtml(String(err && err.message || err))}</li>`;
+            });
+    }
+
+    function formatDate(dateStr) {
+        try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleDateString();
+        } catch {
+            return '';
+        }
+    }
+
+    function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // Function to handle API errors
     function handleApiError(error) {
         const errorModal = document.getElementById('errorModal');
@@ -400,6 +516,246 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Panel divider initialized');
     }
 
+    // Function to load project data from database
+    async function loadProjectFromDatabase(projectId) {
+        try {
+            // Highlight the clicked project item
+            const projectItems = document.querySelectorAll('[data-project-id]');
+            projectItems.forEach(item => {
+                if (item.getAttribute('data-project-id') === projectId) {
+                    item.classList.add('loading');
+                    item.style.opacity = '0.6';
+                } else {
+                    item.classList.remove('active', 'loading');
+                    item.style.opacity = '1';
+                }
+            });
+
+            // Show loading state
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.innerHTML = '<div class="chat-message chat-message-info"><div class="message-content"><span class="message-text">Loading project...</span></div></div>';
+            }
+
+            // Fetch project data from database
+            const response = await fetch(`/api/project-data/${projectId}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load project');
+            }
+
+            const projectStructure = data.projectStructure;
+            
+            // Activate split view if not already active
+            activateSplitView();
+            
+            // Clear chat messages and load project chats
+            clearChatMessages();
+            if (projectStructure.chats && projectStructure.chats.length > 0) {
+                projectStructure.chats.forEach(chat => {
+                    addChatMessage(chat.content, chat.role === 'user' ? 'user' : 'agent');
+                });
+            } else {
+                addChatMessage(`Loaded project: ${projectStructure.projectInfo.name}`, 'info');
+            }
+
+            // Initialize virtual file system with project files
+            if (projectStructure.files && projectStructure.files.length > 0) {
+                try {
+                    if (window.initializeProject) {
+                        window.initializeProject(projectId, projectStructure.files);
+                    }
+                } catch (e) {
+                    console.warn('initializeProject failed:', e);
+                }
+            } else {
+                addChatMessage('No files found in this project.', 'info');
+            }
+
+            // Update project info in the interface if needed
+            updateProjectInfo(projectStructure.projectInfo);
+
+            // Mark project as active and remove loading state
+            projectItems.forEach(item => {
+                if (item.getAttribute('data-project-id') === projectId) {
+                    item.classList.remove('loading');
+                    item.classList.add('active');
+                    item.style.opacity = '1';
+                }
+            });
+
+            // Close sidebar after loading
+            const chatSidebar = document.getElementById('chatSidebar');
+            if (chatSidebar) {
+                chatSidebar.classList.remove('sidebar-visible');
+                chatSidebar.classList.add('sidebar-hidden');
+            }
+
+            console.log('✅ Project loaded successfully:', projectStructure.projectInfo.name);
+
+        } catch (error) {
+            console.error('Failed to load project:', error);
+            clearChatMessages();
+            addChatMessage(`Error loading project: ${error.message}`, 'error');
+            
+            // Remove loading state on error
+            const projectItems = document.querySelectorAll('[data-project-id]');
+            projectItems.forEach(item => {
+                if (item.getAttribute('data-project-id') === projectId) {
+                    item.classList.remove('loading');
+                    item.style.opacity = '1';
+                }
+            });
+        }
+    }
+
+    // Function to update project info in the interface
+    function updateProjectInfo(projectInfo) {
+        // Update any project info displays if they exist
+        const projectTitle = document.querySelector('.project-title');
+        if (projectTitle) {
+            projectTitle.textContent = projectInfo.name;
+        }
+
+        const projectDescription = document.querySelector('.project-description');
+        if (projectDescription) {
+            projectDescription.textContent = projectInfo.description || 'No description';
+        }
+
+        // Store current project info for reference
+        window.currentProject = projectInfo;
+    }
+
+    // Function to reset interface to dashboard view
+    function resetToDashboard() {
+        const dashboardHeader = document.getElementById('dashboardHeader');
+        const splitContainer = document.getElementById('splitContainer');
+        const chatMessages = document.getElementById('chatMessages');
+        const promptInput = document.getElementById('promptInput');
+        const promptInputSplit = document.getElementById('promptInputSplit');
+        
+        // Show dashboard header
+        if (dashboardHeader) {
+            dashboardHeader.style.display = 'flex';
+        }
+        
+        // Hide split container
+        if (splitContainer) {
+            splitContainer.classList.remove('active');
+        }
+        
+        // Clear chat messages
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
+        }
+        
+        // Clear prompt inputs
+        if (promptInput) {
+            promptInput.value = '';
+        }
+        if (promptInputSplit) {
+            promptInputSplit.value = '';
+        }
+        
+        // Reset active project in sidebar
+        const projectItems = document.querySelectorAll('[data-project-id]');
+        projectItems.forEach(item => {
+            item.classList.remove('active', 'loading');
+            item.style.opacity = '1';
+        });
+        
+        // Reset current project
+        window.currentProject = null;
+        if (window.currentProjectId) {
+            window.currentProjectId = null;
+        }
+        
+        // Reset file system if available
+        if (window.currentFiles) {
+            window.currentFiles = {};
+        }
+        
+        // Focus on main prompt input
+        if (promptInput) {
+            promptInput.focus();
+        }
+        
+        console.log('✅ Dashboard reset - ready for new project');
+    }
+
+    // Function to delete a project with confirmation
+    async function deleteProject(projectId) {
+        try {
+            // Find the project name for confirmation dialog
+            const projectItem = document.querySelector(`[data-project-id="${projectId}"]`);
+            const projectName = projectItem ? projectItem.querySelector('span').textContent : 'this project';
+            
+            // Show confirmation dialog
+            const confirmed = confirm(`Are you sure you want to delete "${projectName}"?\n\nThis action cannot be undone and will permanently remove the project and all its files.`);
+            
+            if (!confirmed) {
+                return;
+            }
+            
+            // Show loading state on the delete button
+            const deleteBtn = document.querySelector(`.delete-project-btn[data-project-id="${projectId}"]`);
+            if (deleteBtn) {
+                deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                deleteBtn.disabled = true;
+            }
+            
+            // Send delete request to server
+            const response = await fetch(`/api/project/${projectId}`, {
+                method: 'DELETE'
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Remove the project item from the sidebar
+                if (projectItem) {
+                    projectItem.remove();
+                }
+                
+                // If this was the currently loaded project, reset to dashboard
+                if (window.currentProjectId === projectId) {
+                    resetToDashboard();
+                }
+                
+                // Check if there are no projects left
+                const remainingProjects = document.querySelectorAll('[data-project-id]');
+                const chatList = document.getElementById('chatList');
+                if (remainingProjects.length === 0 && chatList) {
+                    chatList.innerHTML = '<li>No projects yet.</li>';
+                }
+                
+                console.log('✅ Project deleted successfully');
+                
+                // Show success message
+                const chatMessages = document.getElementById('chatMessages');
+                if (chatMessages) {
+                    addChatMessage(`✅ Project "${projectName}" has been deleted successfully.`, 'success');
+                }
+            } else {
+                throw new Error(data.error || 'Failed to delete project');
+            }
+            
+        } catch (error) {
+            console.error('Failed to delete project:', error);
+            
+            // Reset delete button
+            const deleteBtn = document.querySelector(`.delete-project-btn[data-project-id="${projectId}"]`);
+            if (deleteBtn) {
+                deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                deleteBtn.disabled = false;
+            }
+            
+            // Show error message
+            alert(`Failed to delete project: ${error.message}`);
+        }
+    }
+
     // Console message
     console.log(`
     🚀 GenForge Dashboard Ready!
@@ -412,7 +768,10 @@ document.addEventListener('DOMContentLoaded', function() {
     - Virtual file system integration
     - API key management
     - Draggable panel divider
+    - Database project loading
+    - New chat button for fresh start
+    - Project deletion with confirmation
     
-    Start building by entering a prompt in the input field!
+    Start building by entering a prompt in the input field, clicking on an existing project, or use the + button to start fresh!
     `);
 });

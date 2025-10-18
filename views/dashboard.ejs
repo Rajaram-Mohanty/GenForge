@@ -14,7 +14,7 @@
         <div class="nav-container">
             <div class="options">
                 <div class="nav-logo">
-                    <h3>GenForge</h3>
+                    <h3><a href="/" style="text-decoration: none; color: inherit;">GenForge</a></h3>
                 </div>
                 <!-- Chat/Menu Icon -->
                 <div class="nav-chats" id="chatMenuBtn" style="cursor:pointer; margin-left: 1rem; position: relative; top: 2.5px;">
@@ -32,9 +32,14 @@
         <div class="sidebar-content">
             <div class="sidebar-header">
                 <h3><i class="fas fa-folder-open"></i> Your Projects</h3>
-                <button id="closeSidebar" class="sidebar-close-btn">
-                    <i class="fas fa-times"></i>
-                </button>
+                <div class="sidebar-header-actions">
+                    <button id="newChatBtn" class="new-chat-btn" title="Start New Chat">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button id="closeSidebar" class="sidebar-close-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
             </div>
             <ul id="chatList">
                 <li>No projects yet.</li>
