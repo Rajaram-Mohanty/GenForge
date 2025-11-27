@@ -10,9 +10,9 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import cors from 'cors';
 
 import runAgent from './agent.js';
-import VirtualFileSystem from './virtual-file-system.js';
 import { connectDB, User, Project } from './models/index.js';
 
 dotenv.config();
@@ -27,14 +27,22 @@ const asyncExecute = promisify(exec);
 // Connect to MongoDB
 connectDB();
 
-// Set EJS as template engine
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
+// Disconnect legacy EJS frontend (commented out)
+// app.set('view engine', 'ejs');
+// app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Enable CORS for React frontend
+app.use(cors({
+  origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  credentials: true
+}));
+
+// Disconnect legacy static serving (commented out)
+// app.use(express.static(path.join(__dirname, 'public')));
 
 // Session configuration
 app.use(session({
@@ -52,59 +60,16 @@ const requireAuth = (req, res, next) => {
   if (req.session.userId) {
     next();
   } else {
-    res.redirect('/login');
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED' });
   }
 };
 
 // Database models are now imported and will be used instead of in-memory storage
 
-// Initialize virtual file system
-const virtualFileSystem = new VirtualFileSystem();
-
 // Store API key in memory
 let currentApiKey = "AIzaSyDNRIR8Tk1DvqbzvYVEpiixgSDOTivvbik" ;              //|| "AIzaSyB-y4Xu0lsU6Fgb1x-qnH34A-IBbdFBdzk"
 
-// Routes
-app.get('/', async (req, res) => {
-  const isAuthenticated = !!req.session.userId;
-  let user = null;
-  
-  if (isAuthenticated) {
-    try {
-      user = await User.findById(req.session.userId);
-    } catch (error) {
-      console.error('Error fetching user:', error);
-    }
-  }
-  
-  res.render('index', { 
-    title: 'GenForge - AI-Powered Development',
-    isAuthenticated,
-    user
-  });
-});
-
-app.get('/login', (req, res) => {
-  if (req.session.userId) {
-    return res.redirect('/dashboard');
-  }
-  res.render('auth', { 
-    title: 'Login - GenForge',
-    mode: 'login',
-    error: null
-  });
-});
-
-app.get('/signup', (req, res) => {
-  if (req.session.userId) {
-    return res.redirect('/dashboard');
-  }
-  res.render('auth', { 
-    title: 'Sign Up - GenForge',
-    mode: 'signup',
-    error: null
-  });
-});
+// Routes (legacy page routes removed; React handles UI)
 
 app.post('/login', async (req, res) => {
   try {
@@ -119,21 +84,13 @@ app.post('/login', async (req, res) => {
       await user.save();
       
       req.session.userId = user._id;
-      res.redirect('/dashboard');
+      return res.json({ success: true, user: { id: user._id, username: user.username, email: user.email } });
     } else {
-      res.render('auth', { 
-        title: 'Login - GenForge',
-        mode: 'login',
-        error: 'Invalid email or password'
-      });
+      return res.status(401).json({ success: false, error: 'Invalid email or password' });
     }
   } catch (error) {
     console.error('Login error:', error);
-    res.render('auth', { 
-      title: 'Login - GenForge',
-      mode: 'login',
-      error: 'An error occurred during login'
-    });
+    return res.status(500).json({ success: false, error: 'An error occurred during login' });
   }
 });
 
@@ -160,36 +117,22 @@ app.post('/signup', async (req, res) => {
     
     await newUser.save();
     req.session.userId = newUser._id;
-    res.redirect('/dashboard');
+    return res.json({ success: true, user: { id: newUser._id, username: newUser.username, email: newUser.email } });
   } catch (error) {
     console.error('Signup error:', error);
-    res.render('auth', { 
-      title: 'Sign Up - GenForge',
-      mode: 'signup',
-      error: 'An error occurred during signup'
-    });
+    return res.status(500).json({ success: false, error: 'An error occurred during signup' });
   }
 });
 
-app.get('/dashboard', requireAuth, async (req, res) => {
-  try {
-    const user = await User.findById(req.session.userId);
-    res.render('dashboard', { 
-      title: 'Dashboard - GenForge',
-      user
-    });
-  } catch (error) {
-    console.error('Dashboard error:', error);
-    res.redirect('/login');
-  }
-});
+// app.get('/dashboard', requireAuth, async (req, res) => { /* handled by React */ });
 
 app.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       console.error('Session destruction error:', err);
+      return res.status(500).json({ success: false, error: 'Failed to logout' });
     }
-    res.redirect('/');
+    res.json({ success: true });
   });
 });
 
@@ -212,12 +155,6 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
 
     // Call runAgent function with the prompt and get structured response
     const agentResponse = await runAgent(prompt, currentApiKey);
-    
-    // Process the agent response through virtual file system
-    const projectStructure = virtualFileSystem.processAgentResponse(projectId, {
-      ...agentResponse,
-      prompt: prompt
-    });
     
     // Create project in database
     const project = new Project({
@@ -281,7 +218,6 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
       messages: agentResponse.messages,
       fileOperations: agentResponse.fileOperations,
       finalMessage: agentResponse.finalMessage,
-      projectStructure: projectStructure,
       databaseProjectId: project._id
     });
     
@@ -319,47 +255,8 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
 
 
 
-// Get file content
-app.get('/api/file/:projectId/:filePath(*)', requireAuth, (req, res) => {
-  try {
-    const { projectId, filePath } = req.params;
-    
-    const fileContent = virtualFileSystem.getFileContent(projectId, filePath);
-    
-    res.json({
-      success: true,
-      file: fileContent
-    });
-    
-  } catch (error) {
-    console.error('File content error:', error);
-    res.status(404).json({ 
-      success: false,
-      error: 'File not found' 
-    });
-  }
-});
-
-// Get project structure
-app.get('/api/project/:projectId', requireAuth, (req, res) => {
-  try {
-    const { projectId } = req.params;
-    
-    const projectStructure = virtualFileSystem.getProjectStructure(projectId);
-    
-    res.json({
-      success: true,
-      project: projectStructure
-    });
-    
-  } catch (error) {
-    console.error('Project structure error:', error);
-    res.status(404).json({ 
-      success: false,
-      error: 'Project not found' 
-    });
-  }
-});
+// Legacy endpoints removed - all projects now stored in database
+// Use /api/project-data/:projectId for database projects
 
 // Download all files as ZIP
 app.get('/api/download-all', requireAuth, (req, res) => {
@@ -458,7 +355,7 @@ app.get('/api/project/:projectId', requireAuth, async (req, res) => {
   }
 });
 
-// Get project data formatted for virtual file system
+// Get project data formatted for frontend
 app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
@@ -474,8 +371,8 @@ app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
       });
     }
 
-    // Convert database project to virtual file system format
-    const virtualProjectStructure = {
+    // Convert database project to frontend-compatible format
+    const projectStructure = {
       id: project._id.toString(),
       prompt: project.description || project.name,
       createdAt: project.createdAt,
@@ -505,7 +402,7 @@ app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
     
     res.json({
       success: true,
-      projectStructure: virtualProjectStructure
+      projectStructure: projectStructure
     });
   } catch (error) {
     console.error('Project data fetch error:', error);
@@ -699,22 +596,11 @@ app.post('/api/update-file/:projectId', requireAuth, async (req, res) => {
         projectId: projectId
       });
     } else {
-      // Sync changes to virtual file system (for legacy projects)
-      const success = virtualFileSystem.syncFileChanges(projectId, filePath, content);
-      
-      if (success) {
-        res.json({
-          success: true,
-          message: 'File updated successfully in virtual file system',
-          filePath: filePath,
-          projectId: projectId
-        });
-      } else {
-        res.status(404).json({
-          success: false,
-          error: 'File not found or update failed'
-        });
-      }
+      // Legacy project support removed - all projects now in database
+      res.status(404).json({
+        success: false,
+        error: 'Project not found. All projects are now stored in the database.'
+      });
     }
     
   } catch (error) {
@@ -729,17 +615,12 @@ app.post('/api/update-file/:projectId', requireAuth, async (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).render('error', { 
-    title: 'Error - GenForge',
-    message: 'Something went wrong!'
-  });
+  res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR' });
 });
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).render('404', { 
-    title: '404 - Page Not Found'
-  });
+  res.status(404).json({ success: false, error: 'NOT_FOUND' });
 });
 
 app.listen(PORT, () => {
