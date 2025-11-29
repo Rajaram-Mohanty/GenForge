@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Editor } from '@monaco-editor/react'
 import { useProject } from '../contexts/ProjectContext'
+import { apiService } from '../services/apiService'
 
 const RightPanel = ({ currentProject, width }) => {
   const { updateFile } = useProject()
@@ -14,6 +15,7 @@ const RightPanel = ({ currentProject, width }) => {
   const [previewError, setPreviewError] = useState(null)
   const [showFileSelector, setShowFileSelector] = useState(false)
   const [selectedHtmlFile, setSelectedHtmlFile] = useState(null)
+  const [isDownloading, setIsDownloading] = useState(false)
   const editorRef = useRef(null)
 
   useEffect(() => {
@@ -521,6 +523,35 @@ const RightPanel = ({ currentProject, width }) => {
     )
   }
 
+  const handleDownloadProject = async () => {
+    if (!currentProject?._id || isDownloading) return
+    
+    try {
+      setIsDownloading(true)
+      const response = await apiService.downloadProjectZip(currentProject._id)
+      
+      const blob = new Blob([response.data], { type: 'application/zip' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      
+      const projectName = (currentProject.name || 'genforge-project')
+        .replace(/[^a-z0-9_\-]+/gi, '-')
+        .toLowerCase()
+      
+      link.href = url
+      link.download = `${projectName}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Project download error:', error)
+      alert(error.message || 'Failed to download project')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
   return (
     <div 
       className="right-panel" 
@@ -544,6 +575,17 @@ const RightPanel = ({ currentProject, width }) => {
         </div>
         <div className="options-title">
           {isPreviewMode ? 'Preview' : 'Code Editor'}
+        </div>
+        <div className="options-right">
+          <button
+            className="preview-button secondary"
+            onClick={handleDownloadProject}
+            disabled={!currentProject?._id || isDownloading}
+            title={currentProject?._id ? 'Download project as ZIP' : 'No project selected'}
+          >
+            <i className="fas fa-download"></i>
+            {isDownloading ? 'Downloading...' : 'Download'}
+          </button>
         </div>
       </div>
       

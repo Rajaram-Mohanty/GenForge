@@ -103,7 +103,16 @@ export const apiService = {
       const response = await api.post(`/api/generate-prompt?prompt=${encodeURIComponent(prompt)}`)
       return response.data
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to generate project')
+      // Extract error information from response
+      const errorData = error.response?.data
+      const errorMessage = errorData?.message || errorData?.error || 'Failed to generate project'
+      const errorType = errorData?.error || 'GENERATION_ERROR'
+      
+      // Create error with both type and message for proper handling
+      const fullError = new Error(`${errorType}: ${errorMessage}`)
+      fullError.errorType = errorType
+      fullError.errorMessage = errorMessage
+      throw fullError
     }
   },
 
@@ -116,6 +125,17 @@ export const apiService = {
       return response.data
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Failed to update file')
+    }
+  },
+
+  downloadProjectZip: async (projectId) => {
+    try {
+      const response = await api.get(`/api/project/${projectId}/download`, {
+        responseType: 'blob'
+      })
+      return response
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to download project')
     }
   },
 

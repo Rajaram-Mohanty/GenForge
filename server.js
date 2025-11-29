@@ -11,6 +11,7 @@ import { dirname } from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import cors from 'cors';
+import archiver from 'archiver';
 
 import runAgent from './agent.js';
 import { connectDB, User, Project } from './models/index.js';
@@ -66,8 +67,8 @@ const requireAuth = (req, res, next) => {
 
 // Database models are now imported and will be used instead of in-memory storage
 
-// Store API key in memory
-let currentApiKey = "AIzaSyA2s7kIaAFv8poEqpD-etqNlEENTKZZ0ME" ;              //|| "AIzaSyB-y4Xu0lsU6Fgb1x-qnH34A-IBbdFBdzk"
+// Store API key in memory (per-process fallback; primary source is encrypted per-user in DB)
+let currentApiKey = null;
 
 // Routes (legacy page routes removed; React handles UI)
 
@@ -82,9 +83,26 @@ app.post('/login', async (req, res) => {
       // Update last login
       user.lastLogin = new Date();
       await user.save();
-      
+
+      // Load API key for this user (if present)
+      let userApiKey = null;
+      if (typeof user.getApiKey === 'function') {
+        userApiKey = user.getApiKey();
+      }
+
       req.session.userId = user._id;
-      return res.json({ success: true, user: { id: user._id, username: user.username, email: user.email } });
+      req.session.apiKey = userApiKey || null;
+      currentApiKey = userApiKey || currentApiKey;
+
+      return res.json({ 
+        success: true, 
+        user: { 
+          id: user._id, 
+          username: user.username, 
+          email: user.email,
+          hasApiKey: !!userApiKey
+        } 
+      });
     } else {
       return res.status(401).json({ success: false, error: 'Invalid email or password' });
     }
@@ -101,9 +119,8 @@ app.post('/signup', async (req, res) => {
     // Check if user already exists
     const existingUser = await User.findOne({ email: email });
     if (existingUser) {
-      return res.render('auth', { 
-        title: 'Sign Up - GenForge',
-        mode: 'signup',
+      return res.status(400).json({
+        success: false,
         error: 'User with this email already exists'
       });
     }
@@ -117,7 +134,17 @@ app.post('/signup', async (req, res) => {
     
     await newUser.save();
     req.session.userId = newUser._id;
-    return res.json({ success: true, user: { id: newUser._id, username: newUser.username, email: newUser.email } });
+    // New users start without an API key
+    req.session.apiKey = null;
+    return res.json({ 
+      success: true, 
+      user: { 
+        id: newUser._id, 
+        username: newUser.username, 
+        email: newUser.email,
+        hasApiKey: false
+      } 
+    });
   } catch (error) {
     console.error('Signup error:', error);
     return res.status(500).json({ success: false, error: 'An error occurred during signup' });
@@ -153,8 +180,35 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
     // Create a unique project ID
     const projectId = `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // Resolve API key for this user
+    const user = await User.findById(req.session.userId);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'UNAUTHORIZED'
+      });
+    }
+
+    let apiKeyToUse = null;
+    if (typeof user.getApiKey === 'function') {
+      apiKeyToUse = user.getApiKey();
+    }
+
+    // Fallback to in-memory key if configured (legacy support)
+    if (!apiKeyToUse && currentApiKey) {
+      apiKeyToUse = currentApiKey;
+    }
+
+    if (!apiKeyToUse) {
+      return res.status(400).json({
+        success: false,
+        error: 'MISSING_API_KEY',
+        message: 'No API key configured. Please add your Gemini API key first.'
+      });
+    }
+
     // Call runAgent function with the prompt and get structured response
-    const agentResponse = await runAgent(prompt, currentApiKey);
+    const agentResponse = await runAgent(prompt, apiKeyToUse);
     
     // Generate a meaningful project name from the prompt
     // Extract first few words from prompt, or use a default name
@@ -278,30 +332,92 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
 // Legacy endpoints removed - all projects now stored in database
 // Use /api/project-data/:projectId for database projects
 
-// Download all files as ZIP
-app.get('/api/download-all', requireAuth, (req, res) => {
+// Download project files as ZIP (database-backed projects)
+app.get('/api/project/:projectId/download', requireAuth, async (req, res) => {
   try {
-    const { projectId } = req.query;
-    
+    const { projectId } = req.params;
+
     if (!projectId) {
-      return res.status(400).json({ error: 'Project ID is required' });
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID is required'
+      });
     }
-    
-    const project = generatedProjects.get(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+
+    // Only support database projects (ObjectId) since legacy projects are removed
+    const isDatabaseProject = /^[0-9a-fA-F]{24}$/.test(projectId);
+    if (!isDatabaseProject) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found. All projects are now stored in the database.'
+      });
     }
-    
-    // For now, return a simple response
-    // In production, you'd create a ZIP file
-    res.json({
-      success: true,
-      message: 'Download functionality will be implemented with ZIP creation'
+
+    const project = await Project.findOne({
+      _id: projectId,
+      userId: req.session.userId
     });
-    
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      });
+    }
+
+    const safeProjectName = (project.name || 'genforge-project')
+      .replace(/[^a-z0-9_\-]+/gi, '-')
+      .toLowerCase();
+
+    const zipFileName = `${safeProjectName}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
+
+    const archive = archiver('zip', {
+      zlib: { level: 9 }
+    });
+
+    archive.on('error', (err) => {
+      console.error('Archive error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to create project archive'
+        });
+      } else {
+        res.end();
+      }
+    });
+
+    archive.on('warning', (err) => {
+      console.warn('Archive warning:', err);
+    });
+
+    // Pipe archive data to the response
+    archive.pipe(res);
+
+    // Add each file from the database into the archive
+    if (Array.isArray(project.files) && project.files.length > 0) {
+      project.files.forEach((file) => {
+        const entryName = file.path || file.filename || 'untitled.txt';
+        const content = file.content || '';
+        archive.append(content, { name: entryName });
+      });
+    }
+
+    // Finalize the archive (this will start the stream)
+    await archive.finalize();
   } catch (error) {
-    console.error('Download all error:', error);
-    res.status(500).json({ error: 'Failed to download project' });
+    console.error('Download project error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to download project'
+      });
+    } else {
+      res.end();
+    }
   }
 });
 
@@ -309,12 +425,17 @@ app.get('/api/download-all', requireAuth, (req, res) => {
 app.get('/api/user', requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);
+    let hasApiKey = false;
+    if (user && typeof user.getApiKey === 'function') {
+      hasApiKey = !!user.getApiKey();
+    }
     res.json({ 
       success: true, 
       user: { 
         id: user._id, 
         username: user.username, 
-        email: user.email 
+        email: user.email,
+        hasApiKey
       }
     });
   } catch (error) {
@@ -550,13 +671,38 @@ app.post('/api/update-api-key', requireAuth, (req, res) => {
       });
     }
 
-    // Update the API key in memory
-    currentApiKey = apiKey;
-    
-    res.json({
-      success: true,
-      message: 'API key updated successfully and will persist across server restarts'
-    });
+    // Persist API key encrypted per user
+    User.findById(req.session.userId)
+      .then((user) => {
+        if (!user) {
+          return res.status(404).json({
+            success: false,
+            error: 'User not found'
+          });
+        }
+
+        if (typeof user.setApiKey === 'function') {
+          user.setApiKey(apiKey);
+        }
+
+        return user.save().then(() => {
+          // Also cache in session and process memory for this instance
+          req.session.apiKey = apiKey;
+          currentApiKey = apiKey;
+
+          res.json({
+            success: true,
+            message: 'API key updated successfully'
+          });
+        });
+      })
+      .catch((err) => {
+        console.error('API key update DB error:', err);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update API key'
+        });
+      });
     
   } catch (error) {
     console.error('API key update error:', error);

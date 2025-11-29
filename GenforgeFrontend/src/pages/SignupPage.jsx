@@ -16,7 +16,8 @@ const SignupPage = () => {
     try {
       const result = await signup(formData.name, formData.email, formData.password)
       if (result.success) {
-        navigate('/dashboard')
+        // After successful signup, navigate to dashboard and trigger Add API Key modal
+        navigate('/dashboard', { state: { showAddApiKey: true } })
       } else {
         setError(result.error)
       }

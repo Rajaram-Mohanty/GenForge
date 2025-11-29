@@ -24,14 +24,26 @@ const ErrorModal = ({ isOpen, error, onClose, onUpdateApiKey }) => {
 
   let message = 'An error occurred while processing your request.'
   
-  if (error && error.includes('API_QUOTA_EXCEEDED')) {
-    message = 'API quota exceeded. Please update your API key or try again later.'
-  } else if (error && error.includes('INVALID_API_KEY')) {
-    message = 'Invalid API key. Please update your API key.'
-  } else if (error && error.includes('API_ERROR')) {
-    message = error.replace('API_ERROR: ', '')
-  } else if (error) {
-    message = error
+  if (error) {
+    // Extract error message (remove error type prefix if present)
+    if (error.includes('API_QUOTA_EXCEEDED')) {
+      message = error.includes(':') 
+        ? error.split(':').slice(1).join(':').trim() || 'API quota exceeded. Please update your API key or try again later.'
+        : 'API quota exceeded. Please update your API key or try again later.'
+    } else if (error.includes('INVALID_API_KEY')) {
+      message = error.includes(':') 
+        ? error.split(':').slice(1).join(':').trim() || 'Invalid API key. Please update your API key.'
+        : 'Invalid API key. Please update your API key.'
+    } else if (error.includes('API_ERROR')) {
+      message = error.includes(':') 
+        ? error.split(':').slice(1).join(':').trim() || error.replace('API_ERROR: ', '')
+        : error.replace('API_ERROR: ', '')
+    } else {
+      // For other errors, show the full message
+      message = error.includes(':') 
+        ? error.split(':').slice(1).join(':').trim() || error
+        : error
+    }
   }
 
   return (

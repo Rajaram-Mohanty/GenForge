@@ -16,7 +16,12 @@ const LoginPage = () => {
     try {
       const result = await login(formData.email, formData.password)
       if (result.success) {
-        navigate('/dashboard')
+        // If user doesn't have an API key, show the Add API Key modal
+        if (!result.hasApiKey) {
+          navigate('/dashboard', { state: { showAddApiKey: true } })
+        } else {
+          navigate('/dashboard')
+        }
       } else {
         setError(result.error)
       }

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { apiService } from '../services/apiService'
+import { useAuth } from '../contexts/AuthContext'
 
-const ApiKeyModal = ({ isOpen, onClose }) => {
+const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
+  const { checkAuthStatus } = useAuth()
   const [apiKey, setApiKey] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -9,9 +11,9 @@ const ApiKeyModal = ({ isOpen, onClose }) => {
   const inputRef = useRef(null)
 
   useEffect(() => {
-    // Handle click outside to close
+    // Handle click outside to close (only in update mode, not add mode)
     const handleClickOutside = (e) => {
-      if (e.target.id === 'apiKeyModal') {
+      if (e.target.id === 'apiKeyModal' && mode !== 'add') {
         handleClose()
       }
     }
@@ -19,7 +21,10 @@ const ApiKeyModal = ({ isOpen, onClose }) => {
     // Prevent body scroll when modal is open
     if (isOpen) {
       document.body.style.overflow = 'hidden'
-      document.addEventListener('click', handleClickOutside)
+      // Only allow closing by clicking outside in update mode
+      if (mode !== 'add') {
+        document.addEventListener('click', handleClickOutside)
+      }
       // Focus input when modal opens
       setTimeout(() => {
         if (inputRef.current) {
@@ -31,10 +36,12 @@ const ApiKeyModal = ({ isOpen, onClose }) => {
     }
 
     return () => {
-      document.removeEventListener('click', handleClickOutside)
+      if (mode !== 'add') {
+        document.removeEventListener('click', handleClickOutside)
+      }
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen])
+  }, [isOpen, mode])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -50,8 +57,20 @@ const ApiKeyModal = ({ isOpen, onClose }) => {
     try {
       const result = await apiService.updateApiKey(apiKey.trim())
       if (result.success) {
-        alert('API key updated successfully!')
-        handleClose()
+        // Refresh user data to update hasApiKey status
+        if (checkAuthStatus) {
+          await checkAuthStatus()
+        }
+        // Notify parent component that API key was saved
+        if (onApiKeySaved) {
+          onApiKeySaved()
+        }
+        alert(mode === 'add' ? 'API key saved successfully!' : 'API key updated successfully!')
+        // Clear form and close modal - bypass handleClose check since API key is now saved
+        setApiKey('')
+        setError('')
+        setSuccess('')
+        onClose()
       } else {
         setError(result.error || 'Failed to update API key')
       }
@@ -64,6 +83,10 @@ const ApiKeyModal = ({ isOpen, onClose }) => {
   }
 
   const handleClose = () => {
+    // In "add" mode, prevent closing until API key is saved
+    if (mode === 'add') {
+      return
+    }
     setApiKey('')
     setError('')
     setSuccess('')
@@ -78,11 +101,18 @@ const ApiKeyModal = ({ isOpen, onClose }) => {
     >
       <div className="modal-content">
         <div className="modal-header">
-          <h3>Update API Key</h3>
-          <span className="close" id="closeApiKeyModal" onClick={handleClose}>&times;</span>
+          <h3>{mode === 'add' ? 'Add API Key' : 'Update API Key'}</h3>
+          {/* Only show close button in update mode, not in add mode */}
+          {mode !== 'add' && (
+            <span className="close" id="closeApiKeyModal" onClick={handleClose}>&times;</span>
+          )}
         </div>
         <div className="modal-body">
-          <p>Please enter your new Gemini API key:</p>
+          <p>
+            {mode === 'add'
+              ? 'Please add your Gemini API key to start generating projects:'
+              : 'Please enter your new Gemini API key:'}
+          </p>
           <input 
             type="text" 
             id="apiKeyInput" 
@@ -130,16 +160,20 @@ const ApiKeyModal = ({ isOpen, onClose }) => {
               onClick={handleSubmit}
               disabled={loading || !apiKey.trim()}
             >
-              {loading ? 'Updating...' : 'Update API Key'}
+              {loading
+                ? (mode === 'add' ? 'Saving...' : 'Updating...')
+                : (mode === 'add' ? 'Save API Key' : 'Update API Key')}
             </button>
-            <button 
-              id="cancelApiKeyBtn" 
-              className="btn btn-outline"
-              onClick={handleClose}
-              disabled={loading}
-            >
-              Cancel
-            </button>
+            {mode !== 'add' && (
+              <button 
+                id="cancelApiKeyBtn" 
+                className="btn btn-outline"
+                onClick={handleClose}
+                disabled={loading}
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -26,6 +26,8 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.user)
         setIsAuthenticated(true)
+        // Return hasApiKey status for components that need it
+        return { hasApiKey: response.user?.hasApiKey ?? false }
       }
     } catch (error) {
       console.error('Auth check failed:', error)
@@ -42,7 +44,11 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.user)
         setIsAuthenticated(true)
-        return { success: true }
+        return { 
+          success: true, 
+          user: response.user,
+          hasApiKey: response.user?.hasApiKey ?? false
+        }
       }
       return { success: false, error: response.error }
     } catch (error) {
@@ -56,7 +62,11 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.user)
         setIsAuthenticated(true)
-        return { success: true }
+        return { 
+          success: true, 
+          user: response.user,
+          hasApiKey: response.user?.hasApiKey ?? false
+        }
       }
       return { success: false, error: response.error }
     } catch (error) {
@@ -81,7 +91,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     signup,
-    logout
+    logout,
+    checkAuthStatus
   }
 
   return (

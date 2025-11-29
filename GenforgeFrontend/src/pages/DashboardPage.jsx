@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import '../styles/dashboard.css'
 import DashboardNavbar from '../components/DashboardNavbar'
 import ProjectSidebar from '../components/ProjectSidebar'
@@ -6,6 +7,7 @@ import ApiKeyModal from '../components/ApiKeyModal'
 import ErrorModal from '../components/ErrorModal'
 import SplitContainer from '../components/SplitContainer'
 import { useProject } from '../contexts/ProjectContext'
+import { useAuth } from '../contexts/AuthContext'
 
 const DashboardPage = () => {
   const {
@@ -17,19 +19,47 @@ const DashboardPage = () => {
     fetchProject,
     setCurrentProject
   } = useProject()
+  const { user } = useAuth()
 
   const [showSidebar, setShowSidebar] = useState(false)
   const [showApiModal, setShowApiModal] = useState(false)
+  const [apiModalMode, setApiModalMode] = useState('update')
   const [showErrorModal, setShowErrorModal] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [prompt, setPrompt] = useState('')
   const [creating, setCreating] = useState(false)
   const [showSplitView, setShowSplitView] = useState(false)
   const [tempMessages, setTempMessages] = useState([])
+  const [hasCheckedApiKey, setHasCheckedApiKey] = useState(false)
+  const location = useLocation()
 
   useEffect(() => {
     fetchProjects()
   }, [])
+
+  // Check if user has API key on mount or when user changes
+  useEffect(() => {
+    if (user && !location.state?.showAddApiKey) {
+      // If user doesn't have API key and modal is not already shown, show it
+      if (!user.hasApiKey && !showApiModal) {
+        setApiModalMode('add')
+        setShowApiModal(true)
+        setHasCheckedApiKey(true)
+      } else if (user.hasApiKey && showApiModal && apiModalMode === 'add') {
+        // If user now has API key and we're in add mode, close the modal
+        setShowApiModal(false)
+      }
+    }
+  }, [user, location.state, showApiModal, apiModalMode])
+
+  // When navigated from signup/login, show "Add API Key" modal once
+  useEffect(() => {
+    if (location.state && location.state.showAddApiKey) {
+      setApiModalMode('add')
+      setShowApiModal(true)
+      setHasCheckedApiKey(true) // Prevent duplicate check
+    }
+  }, [location.state])
 
   useEffect(() => {
     if (currentProject) {
@@ -41,6 +71,14 @@ const DashboardPage = () => {
   const handleCreateProject = async (value) => {
     const promptValue = (value ?? prompt).trim()
     if (!promptValue) return { success: false, error: 'Prompt is required' }
+
+    // Check if user has API key before proceeding
+    if (!user?.hasApiKey) {
+      // Show "Add API Key" modal if user doesn't have one
+      setApiModalMode('add')
+      setShowApiModal(true)
+      return { success: false, error: 'API key required' }
+    }
 
     // Immediately show split view with smooth transition (like EJS version)
     setShowSplitView(true)
@@ -70,32 +108,58 @@ const DashboardPage = () => {
           return { success: true, project: result.project }
         }
       } else {
-        // Handle API errors - hide split view on error
+        // Stop generating message immediately on error
+        setCreating(false)
+        setShowSplitView(false)
+        setTempMessages([])
+        
+        // Handle API errors
         if (result.error) {
           if (result.error.includes('API_QUOTA_EXCEEDED') || 
               result.error.includes('INVALID_API_KEY') || 
-              result.error.includes('API_ERROR')) {
+              result.error.includes('API_ERROR') ||
+              result.error.includes('MISSING_API_KEY')) {
+            // If missing API key, show add modal instead of error modal
+            if (result.error.includes('MISSING_API_KEY')) {
+              setApiModalMode('add')
+              setShowApiModal(true)
+            } else {
+              // Extract error message (remove error type prefix if present)
+              const errorMsg = result.error.includes(':') 
+                ? result.error.split(':').slice(1).join(':').trim() 
+                : result.error
+              setErrorMessage(result.error) // Keep full error for error type detection
+              setShowErrorModal(true)
+            }
+          } else {
+            // Other errors
             setErrorMessage(result.error)
             setShowErrorModal(true)
-            setShowSplitView(false) // Hide split view on error
-            setTempMessages([])
           }
         }
       }
-      setCreating(false)
       return result
     } catch (error) {
       console.error('Error creating project:', error)
+      // Stop generating message immediately on error
+      setCreating(false)
+      setShowSplitView(false)
+      setTempMessages([])
+      
       const errorMsg = error.message || 'Failed to create project'
       if (errorMsg.includes('API_QUOTA_EXCEEDED') || 
           errorMsg.includes('INVALID_API_KEY') || 
           errorMsg.includes('API_ERROR')) {
         setErrorMessage(errorMsg)
         setShowErrorModal(true)
+      } else if (errorMsg.includes('MISSING_API_KEY')) {
+        // If missing API key, show add modal
+        setApiModalMode('add')
+        setShowApiModal(true)
+      } else {
+        setErrorMessage(errorMsg)
+        setShowErrorModal(true)
       }
-      setShowSplitView(false) // Hide split view on error
-      setTempMessages([])
-      setCreating(false)
       return { success: false, error: errorMsg }
     }
   }
@@ -132,7 +196,10 @@ const DashboardPage = () => {
     <div className="dashboard-root">
       <DashboardNavbar 
         onMenuClick={() => setShowSidebar(true)} 
-        onApiKeyClick={() => setShowApiModal(true)} 
+        onApiKeyClick={() => {
+          setApiModalMode('update')
+          setShowApiModal(true)
+        }} 
       />
 
       <ProjectSidebar
@@ -145,7 +212,22 @@ const DashboardPage = () => {
         loading={loading}
       />
 
-      <ApiKeyModal isOpen={showApiModal} onClose={() => setShowApiModal(false)} />
+      <ApiKeyModal 
+        isOpen={showApiModal} 
+        onClose={() => {
+          // Always allow closing - the modal itself prevents closing in add mode until saved
+          setShowApiModal(false)
+        }} 
+        mode={apiModalMode}
+        onApiKeySaved={async () => {
+          // After API key is saved, refresh user data and close modal
+          // The user state will be updated via checkAuthStatus in the modal
+          // Force close the modal after a short delay to ensure state is updated
+          setTimeout(() => {
+            setShowApiModal(false)
+          }, 100)
+        }}
+      />
       
       <ErrorModal 
         isOpen={showErrorModal} 
@@ -156,6 +238,7 @@ const DashboardPage = () => {
         }}
         onUpdateApiKey={() => {
           setShowErrorModal(false)
+          setApiModalMode('update')
           setShowApiModal(true)
         }}
       />

@@ -78,10 +78,14 @@ export const ProjectProvider = ({ children }) => {
         setCurrentProject(newProject)
         return { success: true, project: newProject }
       }
-      return { success: false, error: response.error }
+      return { success: false, error: response.error || response.message }
     } catch (error) {
-      setError(error.message)
-      return { success: false, error: error.message }
+      // Preserve error type and message for proper error handling
+      const errorMessage = error.errorMessage || error.message || 'Failed to generate project'
+      const errorType = error.errorType || (error.message?.includes(':') ? error.message.split(':')[0] : 'GENERATION_ERROR')
+      const fullError = `${errorType}: ${errorMessage}`
+      setError(fullError)
+      return { success: false, error: fullError }
     } finally {
       setLoading(false)
     }
