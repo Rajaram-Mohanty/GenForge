@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-const LeftPanel = ({ currentProject, onProjectCreate, width }) => {
+const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], isGenerating = false }) => {
   const [messages, setMessages] = useState([])
   const [promptInput, setPromptInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -15,10 +15,12 @@ const LeftPanel = ({ currentProject, onProjectCreate, width }) => {
         timestamp: chat.timestamp || chat.createdAt || new Date()
       }))
       setMessages(formattedMessages)
+    } else if (tempMessages.length > 0) {
+      setMessages(tempMessages)
     } else {
       setMessages([])
     }
-  }, [currentProject])
+  }, [currentProject, tempMessages])
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -143,14 +145,14 @@ const LeftPanel = ({ currentProject, onProjectCreate, width }) => {
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            disabled={isLoading}
+            disabled={isLoading || isGenerating}
           />
           <button 
             type="button" 
             id="submitPromptSplit" 
             className="btn btn-primary prompt-submit-btn"
             onClick={handleSubmitPrompt}
-            disabled={isLoading || !promptInput.trim()}
+            disabled={isLoading || isGenerating || !promptInput.trim()}
           >
             <i className="fas fa-rocket"></i>
             Build App

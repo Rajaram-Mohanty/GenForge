@@ -67,7 +67,7 @@ const requireAuth = (req, res, next) => {
 // Database models are now imported and will be used instead of in-memory storage
 
 // Store API key in memory
-let currentApiKey = "AIzaSyDNRIR8Tk1DvqbzvYVEpiixgSDOTivvbik" ;              //|| "AIzaSyB-y4Xu0lsU6Fgb1x-qnH34A-IBbdFBdzk"
+let currentApiKey = "AIzaSyA2s7kIaAFv8poEqpD-etqNlEENTKZZ0ME" ;              //|| "AIzaSyB-y4Xu0lsU6Fgb1x-qnH34A-IBbdFBdzk"
 
 // Routes (legacy page routes removed; React handles UI)
 
@@ -156,9 +156,29 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
     // Call runAgent function with the prompt and get structured response
     const agentResponse = await runAgent(prompt, currentApiKey);
     
+    // Generate a meaningful project name from the prompt
+    // Extract first few words from prompt, or use a default name
+    const generateProjectName = (prompt) => {
+      if (!prompt || typeof prompt !== 'string') {
+        return `Project ${new Date().toLocaleDateString()}`
+      }
+      // Take first 5-6 words from prompt, max 50 characters
+      const words = prompt.trim().split(/\s+/).slice(0, 6)
+      let name = words.join(' ')
+      // If name is too long, truncate it
+      if (name.length > 50) {
+        name = name.substring(0, 47) + '...'
+      }
+      // If name is empty or too short, use date-based name
+      if (name.length < 3) {
+        return `Project ${new Date().toLocaleDateString()}`
+      }
+      return name
+    }
+
     // Create project in database
     const project = new Project({
-      name: `Project ${new Date().toLocaleDateString()}`,
+      name: generateProjectName(prompt),
       description: prompt,
       userId: req.session.userId,
       projectType: 'web-app'
@@ -355,7 +375,7 @@ app.get('/api/project/:projectId', requireAuth, async (req, res) => {
   }
 });
 
-// Get project data formatted for frontend
+// Get project data formatted for virtual file system
 app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
@@ -371,8 +391,8 @@ app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
       });
     }
 
-    // Convert database project to frontend-compatible format
-    const projectStructure = {
+    // Convert database project to virtual file system format
+    const virtualProjectStructure = {
       id: project._id.toString(),
       prompt: project.description || project.name,
       createdAt: project.createdAt,
@@ -402,7 +422,7 @@ app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
     
     res.json({
       success: true,
-      projectStructure: projectStructure
+      projectStructure: virtualProjectStructure
     });
   } catch (error) {
     console.error('Project data fetch error:', error);

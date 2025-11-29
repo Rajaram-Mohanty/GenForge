@@ -26,35 +26,21 @@ const ProjectSidebar = ({ isOpen, onClose, projects, currentProject, onProjectSe
 
   const handleLogout = async () => {
     await logout()
+    window.location.href = '/'
   }
 
   return (
-    <div 
-      id="chatSidebar" 
-      className={isOpen ? 'sidebar-visible' : 'sidebar-hidden'}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '20%',
-        height: '100%',
-        background: '#1e293b',
-        color: '#fff',
-        boxShadow: '2px 0 8px rgba(0,0,0,0.2)',
-        zIndex: 1000,
-        padding: '1rem',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between'
-      }}
+    <div
+      id="chatSidebar"
+      className={`project-sidebar ${isOpen ? 'sidebar-visible' : 'sidebar-hidden'}`}
     >
       <div className="sidebar-content">
         <div className="sidebar-header">
           <h3><i className="fas fa-folder-open"></i> Your Projects</h3>
           <div className="sidebar-header-actions">
-            <button 
-              id="newChatBtn" 
-              className="new-chat-btn" 
+            <button
+              id="newChatBtn"
+              className="new-chat-btn"
               title="Start New Chat"
               onClick={onNewProject}
             >
@@ -65,7 +51,7 @@ const ProjectSidebar = ({ isOpen, onClose, projects, currentProject, onProjectSe
             </button>
           </div>
         </div>
-        
+
         <ul id="chatList">
           {loading ? (
             <li className="loading">
@@ -80,26 +66,20 @@ const ProjectSidebar = ({ isOpen, onClose, projects, currentProject, onProjectSe
                 key={project._id}
                 className={currentProject?._id === project._id ? 'active' : ''}
                 onClick={() => onProjectSelect(project)}
-                style={{
-                  padding: '0.5rem 0',
-                  borderBottom: '1px solid var(--border-color)',
-                  color: 'var(--text-secondary)',
-                  transition: 'all 0.2s ease',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
               >
-                <div>
-                  <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                    {project.name}
+                <div className="project-info">
+                  <div className="project-name">
+                    {project.name && !project.name.includes('dateOfProjectCreation')
+                      ? project.name
+                      : (project.description
+                        ? project.description.substring(0, 50) + (project.description.length > 50 ? '...' : '')
+                        : `Project ${new Date(project.createdAt).toLocaleDateString()}`)}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  <div className="project-date">
                     {new Date(project.createdAt).toLocaleDateString()}
                   </div>
                 </div>
-                <button 
+                <button
                   className="delete-project-btn"
                   onClick={(e) => handleDeleteProject(project._id, e)}
                   disabled={deletingId === project._id}
@@ -116,15 +96,13 @@ const ProjectSidebar = ({ isOpen, onClose, projects, currentProject, onProjectSe
           )}
         </ul>
       </div>
-      
+
       <div className="nav-menu">
-        <button 
-          type="button" 
-          className="btn btn-outline" 
-          onClick={async () => {
-            await handleLogout()
-            window.location.href = '/'
-          }}
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={handleLogout}
+          style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
         >
           <i className="fas fa-sign-out-alt"></i>
           Logout

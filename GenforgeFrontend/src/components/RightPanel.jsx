@@ -62,6 +62,7 @@ const RightPanel = ({ currentProject, width }) => {
     // Auto-sync changes to backend with debouncing
     if (selectedFile && value !== selectedFile.content) {
       // Update local file cache immediately
+      // The useEffect will handle preview updates when currentFiles changes
       setCurrentFiles(prev => ({
         ...prev,
         [selectedFile.path]: {
@@ -150,7 +151,20 @@ const RightPanel = ({ currentProject, width }) => {
     setPreviewError(null)
     
     // Use editor content if this is the currently selected file, otherwise use file content
+    // Also update currentFiles to ensure we have the latest content
     const htmlContent = (file.path === selectedFile?.path ? editorContent : null) || file.content || ''
+    
+    // Update the file in currentFiles cache if using editor content
+    if (file.path === selectedFile?.path && editorContent) {
+      setCurrentFiles(prev => ({
+        ...prev,
+        [file.path]: {
+          ...prev[file.path],
+          content: editorContent
+        }
+      }))
+    }
+    
     setPreviewHtmlContent(htmlContent)
     setPreviewLoading(false)
   }
@@ -168,7 +182,28 @@ const RightPanel = ({ currentProject, width }) => {
   }
 
   const refreshPreview = () => {
-    if (selectedFile && selectedFile.name.toLowerCase().endsWith('.html')) {
+    if (selectedHtmlFile) {
+      setPreviewLoading(true)
+      setPreviewError(null)
+      
+      // Use editor content if the selected HTML file is currently being edited
+      const htmlContent = (selectedHtmlFile.path === selectedFile?.path ? editorContent : null) || 
+                         selectedHtmlFile.content || ''
+      
+      // Update the file in currentFiles cache if using editor content
+      if (selectedHtmlFile.path === selectedFile?.path && editorContent) {
+        setCurrentFiles(prev => ({
+          ...prev,
+          [selectedHtmlFile.path]: {
+            ...prev[selectedHtmlFile.path],
+            content: editorContent
+          }
+        }))
+      }
+      
+      setPreviewHtmlContent(htmlContent)
+      setPreviewLoading(false)
+    } else if (selectedFile && selectedFile.name.toLowerCase().endsWith('.html')) {
       setPreviewLoading(true)
       setPreviewError(null)
       const htmlContent = editorContent || selectedFile.content || ''
@@ -186,23 +221,165 @@ const RightPanel = ({ currentProject, width }) => {
     }
   }
 
+  // Get all CSS files from the project
+  const getCssFiles = () => {
+    return Object.values(currentFiles).filter(file => 
+      file.name.toLowerCase().endsWith('.css') || 
+      file.name.toLowerCase().endsWith('.scss')
+    )
+  }
+
+  // Get all JS files from the project
+  const getJsFiles = () => {
+    return Object.values(currentFiles).filter(file => 
+      file.name.toLowerCase().endsWith('.js') || 
+      file.name.toLowerCase().endsWith('.jsx') ||
+      file.name.toLowerCase().endsWith('.mjs')
+    )
+  }
+
+  // Extract HTML body content (everything between <body> tags or just the content if no body tag)
+  const extractHtmlBody = (htmlContent) => {
+    if (!htmlContent) return ''
+    
+    // Check if content has <body> tag
+    const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*)<\/body>/i)
+    if (bodyMatch) {
+      return bodyMatch[1]
+    }
+    
+    // Check if content has <html> structure but no body
+    const htmlMatch = htmlContent.match(/<html[^>]*>([\s\S]*)<\/html>/i)
+    if (htmlMatch) {
+      // Extract content between <head> and </head> if exists, and everything after
+      const headMatch = htmlMatch[1].match(/<head[^>]*>([\s\S]*)<\/head>/i)
+      if (headMatch) {
+        return htmlMatch[1].replace(/<head[^>]*>[\s\S]*<\/head>/i, '').trim()
+      }
+      return htmlMatch[1].trim()
+    }
+    
+    // If no structure, return as is (might be just body content)
+    return htmlContent.trim()
+  }
+
+  // Extract title from HTML if present
+  const extractTitle = (htmlContent) => {
+    if (!htmlContent) return 'App Preview'
+    const titleMatch = htmlContent.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
+    return titleMatch ? titleMatch[1].trim() : 'App Preview'
+  }
+
+  // Replace external file references in HTML with inline content
+  const processHtmlReferences = (htmlContent) => {
+    let processedHtml = htmlContent
+    
+    // Replace <link rel="stylesheet"> tags with inline styles
+    const cssFiles = getCssFiles()
+    cssFiles.forEach(cssFile => {
+      const fileName = cssFile.name
+      const fileNameWithoutExt = fileName.replace(/\.(css|scss)$/i, '')
+      
+      // Match various patterns: href="style.css", href="./style.css", href="/style.css", etc.
+      const patterns = [
+        new RegExp(`<link[^>]*href=["']([^"']*${fileName.replace(/\./g, '\\.')})["'][^>]*>`, 'gi'),
+        new RegExp(`<link[^>]*href=["']([^"']*${fileNameWithoutExt.replace(/\./g, '\\.')}\\.css)["'][^>]*>`, 'gi')
+      ]
+      
+      patterns.forEach(pattern => {
+        processedHtml = processedHtml.replace(pattern, (match) => {
+          // Replace the link tag with inline style
+          return `<style>/* ${fileName} */\n${cssFile.content}\n</style>`
+        })
+      })
+    })
+    
+    // Replace <script src=""> tags with inline scripts
+    const jsFiles = getJsFiles()
+    jsFiles.forEach(jsFile => {
+      const fileName = jsFile.name
+      const fileNameWithoutExt = fileName.replace(/\.(js|jsx|mjs)$/i, '')
+      
+      // Match various patterns: src="script.js", src="./script.js", src="/script.js", etc.
+      const patterns = [
+        new RegExp(`<script[^>]*src=["']([^"']*${fileName.replace(/\./g, '\\.')})["'][^>]*>\\s*</script>`, 'gi'),
+        new RegExp(`<script[^>]*src=["']([^"']*${fileNameWithoutExt.replace(/\./g, '\\.')}\\.js)["'][^>]*>\\s*</script>`, 'gi')
+      ]
+      
+      patterns.forEach(pattern => {
+        processedHtml = processedHtml.replace(pattern, (match) => {
+          // Replace the script tag with inline script
+          return `<script>/* ${fileName} */\n${jsFile.content}\n</script>`
+        })
+      })
+    })
+    
+    return processedHtml
+  }
+
   const createFullHtmlDocument = (htmlContent) => {
-    return `<!DOCTYPE html>
+    if (!htmlContent) return ''
+    
+    // Process HTML to replace external references
+    let processedHtml = processHtmlReferences(htmlContent)
+    
+    // Extract body content
+    const bodyContent = extractHtmlBody(processedHtml)
+    const title = extractTitle(processedHtml)
+    
+    // Get all CSS and JS files
+    const cssFiles = getCssFiles()
+    const jsFiles = getJsFiles()
+    
+    // Build CSS content
+    const cssContent = cssFiles.map(cssFile => 
+      `/* ${cssFile.name} */\n${cssFile.content}`
+    ).join('\n\n')
+    
+    // Build JS content
+    const jsContent = jsFiles.map(jsFile => 
+      `/* ${jsFile.name} */\n${jsFile.content}`
+    ).join('\n\n')
+    
+    // Build the complete HTML document
+    let fullHtml = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Preview</title>
+    <title>${title}</title>
     <style>
         /* Reset and base styles */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; line-height: 1.6; }
-    </style>
+    </style>`
+    
+    // Add CSS files if any
+    if (cssContent) {
+      fullHtml += `
+    <style>
+        ${cssContent}
+    </style>`
+    }
+    
+    fullHtml += `
 </head>
 <body>
-    ${htmlContent}
+    ${bodyContent}`
+    
+    // Add JS files if any
+    if (jsContent) {
+      fullHtml += `
+    <script>
+        ${jsContent}
+    </script>`
+    }
+    
+    fullHtml += `
 </body>
 </html>`
+    
+    return fullHtml
   }
 
   const toggleFileSidebar = () => {
@@ -259,15 +436,20 @@ const RightPanel = ({ currentProject, width }) => {
     return iconMap[extension] || 'fas fa-file'
   }
 
-  // Update preview when editor content changes (for HTML files)
+  // Update preview when editor content changes (for HTML files) or when files change
   useEffect(() => {
-    if (isPreviewMode && selectedFile && selectedFile.name.toLowerCase().endsWith('.html')) {
-      // Only update if the selected HTML file matches the currently edited file
-      if (selectedHtmlFile && selectedHtmlFile.path === selectedFile.path) {
-        setPreviewHtmlContent(editorContent)
+    if (isPreviewMode && selectedHtmlFile) {
+      // Get current HTML content (use editor content if HTML file is selected, otherwise use cached content)
+      const htmlContent = (selectedFile && selectedHtmlFile.path === selectedFile.path)
+        ? editorContent
+        : (currentFiles[selectedHtmlFile.path]?.content || selectedHtmlFile.content || '')
+      
+      // Update preview - this will trigger createFullHtmlDocument which reads latest CSS/JS from currentFiles
+      if (htmlContent) {
+        setPreviewHtmlContent(htmlContent)
       }
     }
-  }, [editorContent, isPreviewMode, selectedFile, selectedHtmlFile])
+  }, [editorContent, isPreviewMode, selectedFile, selectedHtmlFile, currentFiles])
 
   const renderPreview = () => {
     const htmlFiles = getHtmlFiles()
@@ -430,7 +612,7 @@ const RightPanel = ({ currentProject, width }) => {
       <div 
         id="previewContainer" 
         className="preview-container"
-        style={{ display: isPreviewMode ? 'block' : 'none' }}
+        style={{ display: isPreviewMode ? 'flex' : 'none' }}
       >
         <div className="preview-header">
           <div className="preview-title">

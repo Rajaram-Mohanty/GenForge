@@ -17,7 +17,13 @@ const ProjectHeader = ({ project }) => {
   return (
     <div className="project-header">
       <div className="project-info">
-        <h2 className="project-title">{project.name}</h2>
+        <h2 className="project-title">
+          {project.name && !project.name.includes('dateOfProjectCreation') 
+            ? project.name 
+            : (project.description 
+                ? project.description.substring(0, 50) + (project.description.length > 50 ? '...' : '')
+                : `Project ${new Date(project.createdAt).toLocaleDateString()}`)}
+        </h2>
         <p className="project-description">{project.description}</p>
         <div className="project-meta">
           <span className="project-type">{project.projectType}</span>

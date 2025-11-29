@@ -24,33 +24,61 @@ const DashboardPage = () => {
   const [errorMessage, setErrorMessage] = useState('')
   const [prompt, setPrompt] = useState('')
   const [creating, setCreating] = useState(false)
+  const [showSplitView, setShowSplitView] = useState(false)
+  const [tempMessages, setTempMessages] = useState([])
 
   useEffect(() => {
     fetchProjects()
   }, [])
 
+  useEffect(() => {
+    if (currentProject) {
+      setTempMessages([])
+      setShowSplitView(true)
+    }
+  }, [currentProject])
+
   const handleCreateProject = async (value) => {
     const promptValue = (value ?? prompt).trim()
     if (!promptValue) return { success: false, error: 'Prompt is required' }
+
+    // Immediately show split view with smooth transition (like EJS version)
+    setShowSplitView(true)
     setCreating(true)
+    setTempMessages([
+      {
+        role: 'user',
+        content: `🚀 Starting to build your application: "${promptValue}"`,
+        timestamp: new Date()
+      },
+      {
+        role: 'agent',
+        content: '⏳ Generating your application...',
+        timestamp: new Date()
+      }
+    ])
+    setPrompt('')
+
     try {
       const result = await createProject(promptValue)
       if (result.success) {
         // createProject already sets currentProject, but ensure it's loaded
         if (result.project && result.project._id) {
           setShowSidebar(false)
-          setPrompt('')
           setCreating(false)
+          setTempMessages([])
           return { success: true, project: result.project }
         }
       } else {
-        // Handle API errors
+        // Handle API errors - hide split view on error
         if (result.error) {
           if (result.error.includes('API_QUOTA_EXCEEDED') || 
               result.error.includes('INVALID_API_KEY') || 
               result.error.includes('API_ERROR')) {
             setErrorMessage(result.error)
             setShowErrorModal(true)
+            setShowSplitView(false) // Hide split view on error
+            setTempMessages([])
           }
         }
       }
@@ -65,6 +93,8 @@ const DashboardPage = () => {
         setErrorMessage(errorMsg)
         setShowErrorModal(true)
       }
+      setShowSplitView(false) // Hide split view on error
+      setTempMessages([])
       setCreating(false)
       return { success: false, error: errorMsg }
     }
@@ -94,6 +124,8 @@ const DashboardPage = () => {
   const handleNewProject = () => {
     setCurrentProject(null)
     setPrompt('')
+    setTempMessages([])
+    setShowSplitView(false) // Reset split view when starting new project
   }
 
   return (
@@ -129,41 +161,53 @@ const DashboardPage = () => {
       />
 
       <div className="dashboard-container" id="dashboardContainer">
-        {!currentProject ? (
-          <div className="dashboard-header" id="dashboardHeader">
-            <h1>Build amazing applications with AI assistance</h1>
-            <div className="prompt-section" id="promptSection">
-              <div className="prompt-input-container">
-                <input
-                  type="text"
-                  id="promptInput"
-                  className="prompt-input-field"
-                  placeholder="Enter your application prompt here..."
-                  maxLength="500"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  disabled={creating}
-                />
-                <button
-                  type="button"
-                  id="submitPrompt"
-                  className="btn btn-primary prompt-submit-btn"
-                  onClick={() => handleCreateProject()}
-                  disabled={creating || !prompt.trim()}
-                >
-                  <i className="fas fa-rocket"></i>
-                  {creating ? 'Building...' : 'Build App'}
-                </button>
-              </div>
-              <div className="prompt-examples">
-                <p>Try: "Create a todo app with React" or "Build a weather dashboard"</p>
-              </div>
+        <div 
+          className="dashboard-header" 
+          id="dashboardHeader"
+          style={{ display: (!currentProject && !showSplitView) ? 'flex' : 'none' }}
+        >
+          <h1>Build amazing applications with AI assistance</h1>
+          <div className="prompt-section" id="promptSection">
+            <div className="prompt-input-container">
+              <input
+                type="text"
+                id="promptInput"
+                className="prompt-input-field"
+                placeholder="Enter your application prompt here..."
+                maxLength="500"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                disabled={creating}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !creating && prompt.trim()) {
+                    handleCreateProject()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                id="submitPrompt"
+                className="btn btn-primary prompt-submit-btn"
+                onClick={() => handleCreateProject()}
+                disabled={creating || !prompt.trim()}
+              >
+                <i className="fas fa-rocket"></i>
+                {creating ? 'Building...' : 'Build App'}
+              </button>
+            </div>
+            <div className="prompt-examples">
+              <p>Try: "Create a todo app with React" or "Build a weather dashboard"</p>
             </div>
           </div>
-        ) : (
+        </div>
+        
+        {(currentProject || showSplitView) && (
           <SplitContainer 
             currentProject={currentProject}
             onProjectCreate={handleCreateProject}
+            tempMessages={tempMessages}
+            isGenerating={!currentProject && creating}
+            isActive={showSplitView || !!currentProject}
           />
         )}
       </div>

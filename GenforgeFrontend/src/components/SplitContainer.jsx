@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import LeftPanel from './LeftPanel'
 import RightPanel from './RightPanel'
 
-const SplitContainer = ({ currentProject, onProjectCreate }) => {
+const SplitContainer = ({ currentProject, onProjectCreate, tempMessages = [], isGenerating = false, isActive = false }) => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(50) // Percentage
   const [isDragging, setIsDragging] = useState(false)
 
@@ -81,11 +81,13 @@ const SplitContainer = ({ currentProject, onProjectCreate }) => {
   }
 
   return (
-    <div className="split-container active" id="splitContainer">
+    <div className={`split-container ${isActive ? 'active' : ''}`} id="splitContainer">
       <LeftPanel 
         currentProject={currentProject}
         onProjectCreate={onProjectCreate}
         width={leftPanelWidth}
+        tempMessages={tempMessages}
+        isGenerating={isGenerating}
       />
       
       {/* Draggable Divider */}
