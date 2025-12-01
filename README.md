@@ -1,298 +1,177 @@
-# GenForge - AI-Powered Web Development Platform
+# GenForge
 
-## 🎯 Project Overview
+GenForge is an advanced AI-powered full-stack web application generator. It leverages the power of Google's Gemini models to autonomously design, code, and deploy web applications based on natural language prompts. Beyond simple code generation, GenForge features a sophisticated RAG (Retrieval-Augmented Generation) pipeline that maintains contextual awareness of the generated codebase, enabling iterative improvements and complex feature additions.
 
-**GenForge** is an innovative AI-powered web development platform that enables users to generate complete, functional web applications using natural language prompts. The platform leverages Google's Gemini AI to understand user requirements and automatically create HTML, CSS, and JavaScript code for fully functional web applications.
+## 🚀 Features
 
-### 🚀 Key Features
+-   **AI-Driven Development**: Generates full-stack React/Node.js applications from simple text descriptions using Gemini 2.0 Flash.
+-   **Virtual IDE**: Integrated browser-based environment with a virtual file system, Monaco editor, and terminal.
+-   **Real-Time Preview**: Instant live preview of the generated application.
+-   **Context-Aware RAG**: Uses a dual-database architecture to index and retrieve code chunks, allowing the AI to understand and modify existing code intelligently.
+-   **Secure Authentication**: Robust user management with encrypted API key storage.
+-   **Project Management**: Dashboard to manage, resume, and delete generated projects.
 
-- **AI-Powered Code Generation**: Generate complete web applications using natural language descriptions
-- **Real-Time Code Editor**: Monaco Editor integration with syntax highlighting and auto-completion
-- **Live Application Preview**: Preview generated applications in real-time within the platform
-- **Virtual File System**: Organized project management with file structure visualization
-- **Chat-Like Interface**: Interactive progress tracking with step-by-step generation updates
-- **API Key Management**: Secure and user-friendly API key configuration
-- **Responsive Design**: Modern, intuitive user interface with draggable panels
-- **Authentication System**: User login/signup with session management
+## 🛠️ Tech Stack
 
-## 🛠 Technology Stack
+### Frontend
+-   **Framework**: React (Vite)
+-   **Styling**: TailwindCSS
+-   **Editor**: Monaco Editor
+-   **Icons**: Lucide React
 
-### **Backend Technologies**
-- **Node.js** (v18+) - Server-side JavaScript runtime
-- **Express.js** - Web application framework
-- **EJS** - Embedded JavaScript templating engine
-- **bcryptjs** - Password hashing and authentication
-- **express-session** - Session management
-- **dotenv** - Environment variable management
+### Backend
+-   **Runtime**: Node.js
+-   **Framework**: Express.js
+-   **Database**: MongoDB (Local for application data, Atlas for Vector Search)
+-   **AI Orchestration**: LangChain, LangGraph
+-   **AI Models**: Google Gemini 2.0 Flash (Generation), Gemini Embedding-001 (Vectorization)
 
-### **Frontend Technologies**
-- **HTML5** - Semantic markup
-- **CSS3** - Modern styling with Flexbox and Grid
-- **JavaScript (ES6+)** - Client-side functionality
-- **Monaco Editor** - Professional code editor (same as VS Code)
-- **Font Awesome** - Icon library
+## 🔄 Workflow & Architecture
 
-### **AI & External Services**
-- **Google Gemini AI** - Advanced language model for code generation
-- **Google Generative AI SDK** - Official Node.js client library
+GenForge operates on a sophisticated pipeline that bridges user intent with executable code.
 
-### **Development Tools**
-- **npm** - Package manager
-- **Git** - Version control
-- **VS Code** - Recommended IDE
+### 1. Prompt to Creation (The Generation Flow)
+When a user enters a prompt (e.g., "Create a to-do list app"):
+1.  **Request Handling**: The prompt is sent to the `/api/generate-prompt` endpoint.
+2.  **Agent Orchestration**: The backend initializes a Gemini-powered agent.
+3.  **Plan & Execute**: The agent generates a plan and outputs a structured JSON containing:
+    -   `fileOperations`: A list of files to create (HTML, CSS, JS) with their content.
+    -   `messages`: Assistant responses describing the actions.
+4.  **Persistence**: The server saves these files directly to the **Local MongoDB** `Project` collection.
+5.  **Response**: The structured project data is returned to the frontend.
 
-## 📋 Software Requirements
+### 2. Prompt to Update (The RAG Flow)
+When a user asks to modify an existing project (e.g., "Add a delete button"):
+1.  **Ingestion (Background)**:
+    -   The `langgraph_index.js` pipeline retrieves the latest project files from Local MongoDB.
+    -   **Semantic Chunking**: Gemini analyzes code files and splits them into logical units (functions, classes).
+    -   **Vectorization**: These chunks are embedded using `embedding-001`.
+    -   **Indexing**: Vectors are stored in **MongoDB Atlas** for high-speed retrieval.
+2.  **Context Retrieval**: The system queries Atlas for code chunks relevant to "delete button".
+3.  **Context Injection**: The retrieved code snippets are injected into the agent's prompt context.
+4.  **Informed Generation**: Gemini generates the specific code changes needed, respecting the existing variable names and structure.
+5.  **Update**: The changes are applied to the files in Local MongoDB.
 
-### **System Requirements**
-- **Operating System**: Windows 10+, macOS 10.14+, or Linux (Ubuntu 18.04+)
-- **Node.js**: Version 18.0.0 or higher
-- **npm**: Version 8.0.0 or higher
-- **RAM**: Minimum 4GB, Recommended 8GB+
-- **Storage**: 1GB free space
-- **Internet**: Required for AI API calls
+### 3. Generation to Preview (The Virtual Runtime)
+How the code comes to life in the browser without a build step:
+1.  **Virtual File System**: The frontend (`RightPanel.jsx`) maintains a state of all project files.
+2.  **Dependency Resolution**:
+    -   The system identifies the entry point (usually `index.html`).
+    -   It parses the HTML to find `<link>` (CSS) and `<script>` (JS) tags.
+3.  **Inline Injection**:
+    -   External CSS files are replaced with `<style>` blocks containing the actual CSS content.
+    -   External JS files are replaced with `<script>` blocks containing the actual JS content.
+4.  **Sandboxed Rendering**: The fully assembled HTML string is injected into an `iframe` using the `srcDoc` attribute. This creates a secure, isolated environment where the app runs exactly as it would on a real server.
 
-### **Browser Requirements**
-- **Chrome**: Version 90+
-- **Firefox**: Version 88+
-- **Safari**: Version 14+
-- **Edge**: Version 90+
+## 📊 Database Schema (ER Diagram)
 
-## 🏗 Architecture Overview
+The system uses a relational structure within MongoDB to manage users, projects, and their associated vector embeddings.
 
-### **System Architecture**
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   AI Service    │
-│   (EJS Views)   │◄──►│   (Express.js)  │◄──►│   (Gemini AI)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Monaco Editor │    │ Virtual File    │    │   Code          │
-│   (Code Editor) │    │ System (VFS)    │    │   Generation    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+```mermaid
+erDiagram
+    User ||--o{ Project : owns
+    Project ||--o{ File : contains
+    Project ||--o{ ProjectVector : has_embeddings
 
-### **Core Components**
+    User {
+        ObjectId _id
+        String username
+        String email
+        String password
+        String apiKey
+    }
 
-1. **Authentication System**
-   - User registration and login
-   - Session-based authentication
-   - Password encryption with bcrypt
+    Project {
+        ObjectId _id
+        String name
+        String description
+        String projectType
+        Date createdAt
+        Date updatedAt
+    }
 
-2. **AI Code Generation Engine**
-   - Natural language processing
-   - Structured command parsing
-   - Multi-file code generation (HTML, CSS, JS)
+    File {
+        String filename
+        String path
+        String content
+        String fileType
+    }
 
-3. **Virtual File System (VFS)**
-   - In-memory project management
-   - File structure organization
-   - Bidirectional file synchronization
-
-4. **Real-Time Code Editor**
-   - Monaco Editor integration
-   - Syntax highlighting
-   - Auto-save functionality
-   - Live code updates
-
-5. **Application Preview System**
-   - Live HTML rendering
-   - CSS and JavaScript execution
-   - Responsive preview mode
-
-## 🔧 Installation & Setup
-
-### **Prerequisites**
-```bash
-# Install Node.js (if not already installed)
-# Download from https://nodejs.org/
-
-# Verify installation
-node --version
-npm --version
+    ProjectVector {
+        ObjectId _id
+        ObjectId projectId
+        String type "function|class|component"
+        String name
+        String content
+        Array embedding
+        String filePath
+    }
 ```
 
-### **Project Setup**
-```bash
-# Clone the repository
-git clone <repository-url>
-cd GenForge
+## ⚙️ RAG Implementation Details
 
-# Install dependencies
-npm install
+The RAG system is designed to minimize resource usage while maximizing context quality.
 
-# Create .env file (optional)
-echo "GEMINI_API_KEY=your_api_key_here" > .env
+-   **Dual-Database Strategy**:
+    -   **Local MongoDB**: Stores the actual file content and project metadata for fast read/write operations during development.
+    -   **MongoDB Atlas**: Dedicated to storing high-dimensional vectors. This separation ensures that heavy vector search operations do not impact the performance of the local development server.
+-   **Semantic Chunking**: Instead of fixed-size chunking (which often breaks code logic), GenForge asks Gemini to parse the code and return logical blocks. This results in higher quality retrieval as the AI gets complete functions or components as context.
+-   **LangGraph Integration**: The ingestion pipeline is built as a state graph (`langgraph_index.js`), making the process observable, resilient, and easy to extend.
 
-# Start the application
-npm start
+## 📦 Installation & Setup
+
+### Prerequisites
+-   Node.js (v18+)
+-   MongoDB (Local instance running on port 27017)
+-   MongoDB Atlas Account (for Vector Search)
+-   Google Cloud API Key (with Gemini access)
+
+### Environment Variables
+Create a `.env` file in the root directory:
+
+```env
+PORT=8080
+MONGO_URI=mongodb://localhost:27017/genforge
+MONGODB_URI_VECTOR=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/genforge
+GOOGLE_API_KEY=your_gemini_api_key
+SESSION_SECRET=your_secret_key
+CLIENT_ORIGIN=http://localhost:5173
 ```
 
-### **Environment Configuration**
-```bash
-# Required environment variables
-GEMINI_API_KEY=your_gemini_api_key
-SESSION_SECRET=your_session_secret
-PORT=8080 (optional, defaults to 8080)
-```
+### Steps
 
-## 🎨 User Interface Features
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/yourusername/genforge.git
+    cd genforge
+    ```
 
-### **Dashboard Layout**
-- **Split-Panel Design**: Left panel for chat/input, right panel for code/preview
-- **Draggable Resizer**: Adjustable panel widths for optimal workspace
-- **Navigation Bar**: User info, API key management, logout functionality
+2.  **Install Dependencies**
+    ```bash
+    npm install
+    cd GenforgeFrontend
+    npm install
+    cd ..
+    ```
 
-### **Code Generation Interface**
-- **Prompt Input**: Natural language description of desired application
-- **Progress Tracking**: Real-time updates during code generation
-- **File Sidebar**: Organized project structure with file navigation
-- **Code Editor**: Professional editing experience with syntax highlighting
+3.  **Start the Backend**
+    ```bash
+    npm start
+    ```
 
-### **Preview System**
-- **Toggle Controls**: Switch between code editor and live preview
-- **File Selector**: Choose which HTML file to preview
-- **Refresh Controls**: Update preview with latest changes
-- **External Preview**: Open in new tab for full-screen experience
+4.  **Start the Frontend** (in a new terminal)
+    ```bash
+    cd GenforgeFrontend
+    npm run dev
+    ```
 
-## 🔐 Security Features
+5.  **Access the Application**
+    Open `http://localhost:5173` in your browser.
 
-### **Authentication & Authorization**
-- **Password Hashing**: bcrypt with salt rounds
-- **Session Management**: Secure session handling
-- **Route Protection**: Authentication middleware for protected routes
+## 🤝 Contributing
 
-### **API Key Management**
-- **Secure Storage**: In-memory storage with environment variable fallback
-- **User Interface**: Modal-based API key updates
-- **Validation**: Input validation and error handling
-
-### **Data Protection**
-- **Input Sanitization**: XSS prevention
-- **CSRF Protection**: Session-based security
-- **Error Handling**: Graceful error management
-
-## 📊 Performance & Scalability
-
-### **Performance Optimizations**
-- **Lazy Loading**: Monaco Editor loads on demand
-- **Debounced Updates**: Optimized file synchronization
-- **Caching**: In-memory project storage
-- **Efficient Rendering**: EJS template optimization
-
-### **Scalability Considerations**
-- **Modular Architecture**: Separated concerns for easy scaling
-- **Stateless Design**: Session-based user management
-- **API Abstraction**: Easy to switch AI providers
-- **Database Ready**: Prepared for database integration
-
-## 🚀 Key Innovations
-
-### **AI Integration**
-- **Natural Language Processing**: Convert user descriptions to code
-- **Structured Output**: Organized file generation with proper structure
-- **Error Handling**: Robust API error management
-- **Fallback Mechanisms**: Graceful degradation on API failures
-
-### **Developer Experience**
-- **Real-Time Feedback**: Immediate visual feedback during generation
-- **Code Quality**: Generated code follows best practices
-- **Editability**: Full control over generated code
-- **Preview Integration**: Instant application testing
-
-### **User Experience**
-- **Intuitive Interface**: Chat-like interaction model
-- **Visual Progress**: Step-by-step generation updates
-- **Flexible Workspace**: Customizable panel layouts
-- **Accessibility**: Keyboard navigation and screen reader support
-
-## 📈 Future Enhancements
-
-### **Planned Features**
-- **Database Integration**: Persistent project storage
-- **User Management**: Multi-user support with project sharing
-- **Template Library**: Pre-built application templates
-- **Export Functionality**: ZIP download of generated projects
-- **Version Control**: Git integration for project history
-- **Collaboration**: Real-time collaborative editing
-
-### **Technical Improvements**
-- **Microservices Architecture**: Scalable service decomposition
-- **Real-Time Updates**: WebSocket integration for live collaboration
-- **Advanced AI Models**: Support for multiple AI providers
-- **Mobile Application**: React Native or Flutter mobile app
-- **Cloud Deployment**: Docker containerization and cloud hosting
-
-## 🎯 Use Cases
-
-### **Educational Institutions**
-- **Programming Courses**: Visual learning of web development
-- **Project-Based Learning**: Hands-on application building
-- **Code Review**: Understanding generated code structure
-
-### **Business Applications**
-- **Rapid Prototyping**: Quick application mockups
-- **Internal Tools**: Custom business applications
-- **Client Demos**: Fast proof-of-concept development
-
-### **Individual Developers**
-- **Learning Tool**: Understanding web development concepts
-- **Code Reference**: Best practices and patterns
-- **Project Starting Point**: Foundation for custom applications
-
-## 📝 API Documentation
-
-### **Core Endpoints**
-```
-POST /api/generate-prompt - Generate code from prompt
-GET  /api/file/:projectId/:filePath - Get file content
-POST /api/update-file/:projectId - Update file content
-POST /api/update-api-key - Update API key
-GET  /api/project/:projectId - Get project structure
-```
-
-### **Authentication Endpoints**
-```
-GET  /login - Login page
-POST /login - Authenticate user
-GET  /signup - Registration page
-POST /signup - Create new user
-POST /logout - End session
-```
-
-## 🔍 Troubleshooting
-
-### **Common Issues**
-1. **API Key Errors**: Ensure valid Gemini API key is configured
-2. **Port Conflicts**: Change PORT environment variable if 8080 is busy
-3. **Node Version**: Ensure Node.js 18+ is installed
-4. **Dependencies**: Run `npm install` to install missing packages
-
-### **Performance Issues**
-1. **Memory Usage**: Monitor RAM usage during large project generation
-2. **Network Latency**: Check internet connection for AI API calls
-3. **Browser Compatibility**: Use supported browser versions
+Contributions are welcome! Please fork the repository and submit a pull request for any enhancements or bug fixes.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 👥 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📞 Support
-
-For support and questions:
-- Create an issue in the repository
-- Contact the development team
-- Check the documentation
-
----
-
-**GenForge** - Transforming ideas into code with AI-powered web development.
+This project is licensed under the MIT License.
