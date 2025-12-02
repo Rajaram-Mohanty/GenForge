@@ -130,16 +130,16 @@ const projectSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-});
+}, { collection: 'Projects' });
 
 // Update the updatedAt field before saving
-projectSchema.pre('save', function(next) {
+projectSchema.pre('save', function (next) {
   this.updatedAt = new Date();
   next();
 });
 
 // Method to add a chat message
-projectSchema.methods.addChatMessage = function(role, content, metadata = {}) {
+projectSchema.methods.addChatMessage = function (role, content, metadata = {}) {
   this.chats.push({
     role,
     content,
@@ -149,7 +149,7 @@ projectSchema.methods.addChatMessage = function(role, content, metadata = {}) {
 };
 
 // Method to add a file
-projectSchema.methods.addFile = function(filename, path, content, fileType) {
+projectSchema.methods.addFile = function (filename, path, content, fileType) {
   this.files.push({
     filename,
     path,
@@ -161,7 +161,7 @@ projectSchema.methods.addFile = function(filename, path, content, fileType) {
 };
 
 // Method to update a file
-projectSchema.methods.updateFile = function(fileId, content) {
+projectSchema.methods.updateFile = function (fileId, content) {
   const file = this.files.id(fileId);
   if (file) {
     file.content = content;
@@ -172,13 +172,13 @@ projectSchema.methods.updateFile = function(fileId, content) {
 };
 
 // Method to delete a file
-projectSchema.methods.deleteFile = function(fileId) {
+projectSchema.methods.deleteFile = function (fileId) {
   this.files.pull(fileId);
   return this.save();
 };
 
 // Method to get recent chat messages
-projectSchema.methods.getRecentChats = function(limit = 50) {
+projectSchema.methods.getRecentChats = function (limit = 50) {
   return this.chats
     .sort({ timestamp: -1 })
     .limit(limit)
@@ -186,8 +186,8 @@ projectSchema.methods.getRecentChats = function(limit = 50) {
 };
 
 // Method to search files by name or type
-projectSchema.methods.searchFiles = function(query) {
-  return this.files.filter(file => 
+projectSchema.methods.searchFiles = function (query) {
+  return this.files.filter(file =>
     file.filename.toLowerCase().includes(query.toLowerCase()) ||
     file.fileType.toLowerCase().includes(query.toLowerCase())
   );

@@ -16,6 +16,7 @@ const DashboardPage = () => {
     loading,
     fetchProjects,
     createProject,
+    updateProject,
     fetchProject,
     setCurrentProject
   } = useProject()
@@ -112,21 +113,21 @@ const DashboardPage = () => {
         setCreating(false)
         setShowSplitView(false)
         setTempMessages([])
-        
+
         // Handle API errors
         if (result.error) {
-          if (result.error.includes('API_QUOTA_EXCEEDED') || 
-              result.error.includes('INVALID_API_KEY') || 
-              result.error.includes('API_ERROR') ||
-              result.error.includes('MISSING_API_KEY')) {
+          if (result.error.includes('API_QUOTA_EXCEEDED') ||
+            result.error.includes('INVALID_API_KEY') ||
+            result.error.includes('API_ERROR') ||
+            result.error.includes('MISSING_API_KEY')) {
             // If missing API key, show add modal instead of error modal
             if (result.error.includes('MISSING_API_KEY')) {
               setApiModalMode('add')
               setShowApiModal(true)
             } else {
               // Extract error message (remove error type prefix if present)
-              const errorMsg = result.error.includes(':') 
-                ? result.error.split(':').slice(1).join(':').trim() 
+              const errorMsg = result.error.includes(':')
+                ? result.error.split(':').slice(1).join(':').trim()
                 : result.error
               setErrorMessage(result.error) // Keep full error for error type detection
               setShowErrorModal(true)
@@ -145,11 +146,11 @@ const DashboardPage = () => {
       setCreating(false)
       setShowSplitView(false)
       setTempMessages([])
-      
+
       const errorMsg = error.message || 'Failed to create project'
-      if (errorMsg.includes('API_QUOTA_EXCEEDED') || 
-          errorMsg.includes('INVALID_API_KEY') || 
-          errorMsg.includes('API_ERROR')) {
+      if (errorMsg.includes('API_QUOTA_EXCEEDED') ||
+        errorMsg.includes('INVALID_API_KEY') ||
+        errorMsg.includes('API_ERROR')) {
         setErrorMessage(errorMsg)
         setShowErrorModal(true)
       } else if (errorMsg.includes('MISSING_API_KEY')) {
@@ -170,7 +171,7 @@ const DashboardPage = () => {
       setShowSidebar(false)
       return
     }
-    
+
     try {
       const res = await fetchProject(project._id)
       if (res.success) {
@@ -194,12 +195,12 @@ const DashboardPage = () => {
 
   return (
     <div className="dashboard-root">
-      <DashboardNavbar 
-        onMenuClick={() => setShowSidebar(true)} 
+      <DashboardNavbar
+        onMenuClick={() => setShowSidebar(true)}
         onApiKeyClick={() => {
           setApiModalMode('update')
           setShowApiModal(true)
-        }} 
+        }}
       />
 
       <ProjectSidebar
@@ -212,12 +213,12 @@ const DashboardPage = () => {
         loading={loading}
       />
 
-      <ApiKeyModal 
-        isOpen={showApiModal} 
+      <ApiKeyModal
+        isOpen={showApiModal}
         onClose={() => {
           // Always allow closing - the modal itself prevents closing in add mode until saved
           setShowApiModal(false)
-        }} 
+        }}
         mode={apiModalMode}
         onApiKeySaved={async () => {
           // After API key is saved, refresh user data and close modal
@@ -228,9 +229,9 @@ const DashboardPage = () => {
           }, 100)
         }}
       />
-      
-      <ErrorModal 
-        isOpen={showErrorModal} 
+
+      <ErrorModal
+        isOpen={showErrorModal}
         error={errorMessage}
         onClose={() => {
           setShowErrorModal(false)
@@ -244,8 +245,8 @@ const DashboardPage = () => {
       />
 
       <div className="dashboard-container" id="dashboardContainer">
-        <div 
-          className="dashboard-header" 
+        <div
+          className="dashboard-header"
           id="dashboardHeader"
           style={{ display: (!currentProject && !showSplitView) ? 'flex' : 'none' }}
         >
@@ -283,11 +284,12 @@ const DashboardPage = () => {
             </div>
           </div>
         </div>
-        
+
         {(currentProject || showSplitView) && (
-          <SplitContainer 
+          <SplitContainer
             currentProject={currentProject}
             onProjectCreate={handleCreateProject}
+            onProjectUpdate={updateProject}
             tempMessages={tempMessages}
             isGenerating={!currentProject && creating}
             isActive={showSplitView || !!currentProject}

@@ -116,6 +116,18 @@ export const apiService = {
     }
   },
 
+  updateProjectCode: async (projectId, prompt) => {
+    try {
+      const response = await api.post('/api/chat/update-code', {
+        projectId,
+        prompt
+      })
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Failed to update project code')
+    }
+  },
+
   updateFile: async (projectId, filePath, content) => {
     try {
       const response = await api.post(`/api/update-file/${projectId}`, {

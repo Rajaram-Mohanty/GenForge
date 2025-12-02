@@ -91,6 +91,31 @@ export const ProjectProvider = ({ children }) => {
     }
   }
 
+  const updateProject = async (projectId, prompt) => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const response = await apiService.updateProjectCode(projectId, prompt)
+
+      if (response.success) {
+        // Refresh the project to get updated files
+        const projectRes = await fetchProject(projectId)
+        if (projectRes.success) {
+          return { success: true, project: projectRes.project, message: response.message }
+        }
+      }
+
+      return { success: false, error: response.error || 'Failed to update project' }
+    } catch (error) {
+      console.error('Update project error:', error)
+      setError(error.message)
+      return { success: false, error: error.message }
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const fetchProject = async (projectId) => {
     try {
       setLoading(true)
@@ -132,8 +157,8 @@ export const ProjectProvider = ({ children }) => {
         if (currentProject && currentProject._id === projectId) {
           setCurrentProject(prev => ({
             ...prev,
-            files: prev.files.map(file => 
-              file.path === filePath 
+            files: prev.files.map(file =>
+              file.path === filePath
                 ? { ...file, content, lastModified: new Date() }
                 : file
             )
@@ -196,6 +221,7 @@ export const ProjectProvider = ({ children }) => {
     error,
     fetchProjects,
     createProject,
+    updateProject,
     fetchProject,
     updateFile,
     deleteProject,

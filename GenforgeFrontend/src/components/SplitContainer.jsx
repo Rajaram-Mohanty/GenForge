@@ -2,20 +2,20 @@ import { useState, useEffect } from 'react'
 import LeftPanel from './LeftPanel'
 import RightPanel from './RightPanel'
 
-const SplitContainer = ({ currentProject, onProjectCreate, tempMessages = [], isGenerating = false, isActive = false }) => {
+const SplitContainer = ({ currentProject, onProjectCreate, onProjectUpdate, tempMessages = [], isGenerating = false, isActive = false }) => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(50) // Percentage
   const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging) return
-      
+
       const container = document.getElementById('splitContainer')
       if (!container) return
-      
+
       const rect = container.getBoundingClientRect()
       const newLeftWidth = ((e.clientX - rect.left) / rect.width) * 100
-      
+
       // Constrain between 20% and 80%
       const constrainedWidth = Math.min(Math.max(newLeftWidth, 20), 80)
       setLeftPanelWidth(constrainedWidth)
@@ -29,13 +29,13 @@ const SplitContainer = ({ currentProject, onProjectCreate, tempMessages = [], is
 
     const handleTouchMove = (e) => {
       if (!isDragging) return
-      
+
       const container = document.getElementById('splitContainer')
       if (!container) return
-      
+
       const rect = container.getBoundingClientRect()
       const newLeftWidth = ((e.touches[0].clientX - rect.left) / rect.width) * 100
-      
+
       // Constrain between 20% and 80%
       const constrainedWidth = Math.min(Math.max(newLeftWidth, 20), 80)
       setLeftPanelWidth(constrainedWidth)
@@ -82,16 +82,17 @@ const SplitContainer = ({ currentProject, onProjectCreate, tempMessages = [], is
 
   return (
     <div className={`split-container ${isActive ? 'active' : ''}`} id="splitContainer">
-      <LeftPanel 
+      <LeftPanel
         currentProject={currentProject}
         onProjectCreate={onProjectCreate}
+        onProjectUpdate={onProjectUpdate}
         width={leftPanelWidth}
         tempMessages={tempMessages}
         isGenerating={isGenerating}
       />
-      
+
       {/* Draggable Divider */}
-      <div 
+      <div
         className={`panel-divider ${isDragging ? 'dragging' : ''}`}
         id="panelDivider"
         onMouseDown={handleDividerMouseDown}
@@ -105,8 +106,8 @@ const SplitContainer = ({ currentProject, onProjectCreate, tempMessages = [], is
           </div>
         </div>
       </div>
-      
-      <RightPanel 
+
+      <RightPanel
         currentProject={currentProject}
         width={100 - leftPanelWidth}
       />

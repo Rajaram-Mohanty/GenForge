@@ -94,8 +94,8 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
   }
 
   return (
-    <div 
-      id="apiKeyModal" 
+    <div
+      id="apiKeyModal"
       className="modal"
       style={{ display: isOpen ? 'block' : 'none' }}
     >
@@ -113,10 +113,30 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
               ? 'Please add your Gemini API key to start generating projects:'
               : 'Please enter your new Gemini API key:'}
           </p>
-          <input 
-            type="text" 
-            id="apiKeyInput" 
-            placeholder="Enter your API key here..." 
+          <div style={{ marginBottom: '1rem' }}>
+            <a
+              href="https://aistudio.google.com/api-keys?_gl=1*1ped2n0*_ga*MTIzMDQ4MjIwMS4xNzY0MzExNzAw*_ga_P1DBVKWT6V*czE3NjQ2OTc5MTEkbzUkZzAkdDE3NjQ2OTc5MTEkajYwJGwwJGgzMzQyNzM3NzE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-sm btn-outline"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.85rem',
+                padding: '0.4rem 0.8rem',
+                textDecoration: 'none',
+                color: 'var(--primary-color)',
+                borderColor: 'var(--primary-color)'
+              }}
+            >
+              <i className="fas fa-external-link-alt"></i> Get Gemini Key
+            </a>
+          </div>
+          <input
+            type="text"
+            id="apiKeyInput"
+            placeholder="Enter your API key here..."
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             ref={inputRef}
@@ -126,10 +146,10 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
               }
             }}
           />
-          
+
           {error && (
-            <div className="error-message" style={{ 
-              color: '#ef4444', 
+            <div className="error-message" style={{
+              color: '#ef4444',
               marginBottom: '1rem',
               padding: '0.5rem',
               background: 'rgba(239, 68, 68, 0.1)',
@@ -139,10 +159,10 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
               <i className="fas fa-exclamation-triangle"></i> {error}
             </div>
           )}
-          
+
           {success && (
-            <div className="success-message" style={{ 
-              color: '#10b981', 
+            <div className="success-message" style={{
+              color: '#10b981',
               marginBottom: '1rem',
               padding: '0.5rem',
               background: 'rgba(16, 185, 129, 0.1)',
@@ -152,10 +172,10 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
               <i className="fas fa-check-circle"></i> {success}
             </div>
           )}
-          
+
           <div className="modal-actions">
-            <button 
-              id="updateApiKeyBtn" 
+            <button
+              id="updateApiKeyBtn"
               className="btn btn-primary"
               onClick={handleSubmit}
               disabled={loading || !apiKey.trim()}
@@ -165,8 +185,8 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
                 : (mode === 'add' ? 'Save API Key' : 'Update API Key')}
             </button>
             {mode !== 'add' && (
-              <button 
-                id="cancelApiKeyBtn" 
+              <button
+                id="cancelApiKeyBtn"
                 className="btn btn-outline"
                 onClick={handleClose}
                 disabled={loading}
@@ -177,7 +197,7 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   )
 }
 

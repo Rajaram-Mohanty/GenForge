@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], isGenerating = false }) => {
+const LeftPanel = ({ currentProject, onProjectCreate, onProjectUpdate, width, tempMessages = [], isGenerating = false }) => {
   const [messages, setMessages] = useState([])
   const [promptInput, setPromptInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -33,7 +33,7 @@ const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], 
     if (!promptInput.trim() || isLoading) return
 
     const promptValue = promptInput.trim()
-    
+
     // Add initial user message matching EJS version
     const userMessage = {
       role: 'user',
@@ -46,8 +46,16 @@ const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], 
     setIsLoading(true)
 
     try {
-      const result = await onProjectCreate(promptValue)
-      
+      let result;
+
+      if (currentProject && onProjectUpdate) {
+        // Update existing project
+        result = await onProjectUpdate(currentProject._id, promptValue)
+      } else {
+        // Create new project
+        result = await onProjectCreate(promptValue)
+      }
+
       if (result.success) {
         // Messages from the generation are already in the project's chats array
         // They will be loaded when currentProject updates
@@ -61,7 +69,7 @@ const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], 
       } else {
         const errorMessage = {
           role: 'agent',
-          content: `Error: ${result.error || 'Failed to create project'}`,
+          content: `Error: ${result.error || 'Failed to process request'}`,
           timestamp: new Date()
         }
         setMessages(prev => [...prev, errorMessage])
@@ -86,8 +94,8 @@ const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], 
   }
 
   return (
-    <div 
-      className="left-panel" 
+    <div
+      className="left-panel"
       id="leftPanel"
       style={{ width: `${width}%` }}
     >
@@ -104,14 +112,13 @@ const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], 
             </div>
           ) : (
             messages.map((message, index) => (
-              <div 
+              <div
                 key={index}
-                className={`chat-message ${
-                  message.role === 'user' ? 'chat-message-user' : 
+                className={`chat-message ${message.role === 'user' ? 'chat-message-user' :
                   message.role === 'agent' ? 'chat-message-agent' :
-                  message.content.includes('Error') ? 'chat-message-error' :
-                  'chat-message-success'
-                }`}
+                    message.content.includes('Error') ? 'chat-message-error' :
+                      'chat-message-success'
+                  }`}
               >
                 <div className="message-content">
                   <div className="message-text">
@@ -132,14 +139,14 @@ const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], 
           )}
         </div>
       </div>
-      
+
       {/* Prompt Input Section */}
       <div className="prompt-section-split" id="promptSectionSplit">
         <div className="prompt-input-container">
-          <input 
-            type="text" 
-            id="promptInputSplit" 
-            className="prompt-input-field" 
+          <input
+            type="text"
+            id="promptInputSplit"
+            className="prompt-input-field"
             placeholder="Enter your application prompt here..."
             maxLength="500"
             value={promptInput}
@@ -147,9 +154,9 @@ const LeftPanel = ({ currentProject, onProjectCreate, width, tempMessages = [], 
             onKeyPress={handleKeyPress}
             disabled={isLoading || isGenerating}
           />
-          <button 
-            type="button" 
-            id="submitPromptSplit" 
+          <button
+            type="button"
+            id="submitPromptSplit"
             className="btn btn-primary prompt-submit-btn"
             onClick={handleSubmitPrompt}
             disabled={isLoading || isGenerating || !promptInput.trim()}

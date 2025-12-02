@@ -18,6 +18,9 @@ const RightPanel = ({ currentProject, width }) => {
   const [isDownloading, setIsDownloading] = useState(false)
   const editorRef = useRef(null)
 
+  // Track if it's the initial load for the current project
+  const lastProjectIdRef = useRef(null)
+
   useEffect(() => {
     if (currentProject && currentProject.files && currentProject.files.length > 0) {
       const files = {}
@@ -34,21 +37,32 @@ const RightPanel = ({ currentProject, width }) => {
         }
       })
       setCurrentFiles(files)
-      
-      // Set first file as selected
-      const firstFile = currentProject.files[0]
-      if (firstFile) {
-        const formattedFile = {
-          name: firstFile.name || firstFile.filename || 'untitled',
-          path: firstFile.path || `${firstFile.name || 'file'}`,
-          content: firstFile.content || '',
-          type: firstFile.type || firstFile.fileType || 'txt',
-          language: firstFile.language || 'plaintext',
-          extension: firstFile.extension || `.${firstFile.type || firstFile.fileType || 'txt'}`
+
+      // Only set initial file and open sidebar if it's a NEW project being loaded
+      // or if we don't have a selected file yet
+      if (currentProject._id !== lastProjectIdRef.current || !selectedFile) {
+        const firstFile = currentProject.files[0]
+        if (firstFile) {
+          const formattedFile = {
+            name: firstFile.name || firstFile.filename || 'untitled',
+            path: firstFile.path || `${firstFile.name || 'file'}`,
+            content: firstFile.content || '',
+            type: firstFile.type || firstFile.fileType || 'txt',
+            language: firstFile.language || 'plaintext',
+            extension: firstFile.extension || `.${firstFile.type || firstFile.fileType || 'txt'}`
+          }
+          setSelectedFile(formattedFile)
+          setEditorContent(formattedFile.content || '')
+          setShowFileSidebar(true)
         }
-        setSelectedFile(formattedFile)
-        setEditorContent(formattedFile.content || '')
-        setShowFileSidebar(true)
+        lastProjectIdRef.current = currentProject._id
+      } else {
+        // If just updating content (e.g. after save), update the selected file's content in editor if needed
+        // But DON'T force sidebar open or change selected file
+        if (selectedFile && files[selectedFile.path]) {
+          // Optional: update editor content if it changed externally? 
+          // For now, let's keep user's current view to avoid jumping
+        }
       }
     } else {
       // Reset when no project or no files
@@ -56,15 +70,14 @@ const RightPanel = ({ currentProject, width }) => {
       setSelectedFile(null)
       setEditorContent('// Your code will appear here...')
       setShowFileSidebar(false)
+      lastProjectIdRef.current = null
     }
   }, [currentProject])
 
   const handleEditorChange = (value) => {
     setEditorContent(value)
-    // Auto-sync changes to backend with debouncing
-    if (selectedFile && value !== selectedFile.content) {
-      // Update local file cache immediately
-      // The useEffect will handle preview updates when currentFiles changes
+    // Update local file cache immediately
+    if (selectedFile) {
       setCurrentFiles(prev => ({
         ...prev,
         [selectedFile.path]: {
@@ -72,30 +85,6 @@ const RightPanel = ({ currentProject, width }) => {
           content: value
         }
       }))
-      
-      // Debounce sync to backend (sync after 1 second of no changes)
-      if (window.syncTimeout) {
-        clearTimeout(window.syncTimeout)
-      }
-      
-      window.syncTimeout = setTimeout(async () => {
-        if (currentProject && currentProject._id && selectedFile) {
-          try {
-            const response = await updateFile(
-              currentProject._id,
-              selectedFile.path,
-              value
-            )
-            if (response.success) {
-              console.log('✅ Changes synced to backend')
-            } else {
-              console.error('❌ Failed to sync changes:', response.error)
-            }
-          } catch (error) {
-            console.error('❌ Error syncing changes:', error)
-          }
-        }
-      }, 1000) // 1 second debounce
     }
   }
 
@@ -110,8 +99,8 @@ const RightPanel = ({ currentProject, width }) => {
   }
 
   const getHtmlFiles = () => {
-    return Object.values(currentFiles).filter(file => 
-      file.name.toLowerCase().endsWith('.html') || 
+    return Object.values(currentFiles).filter(file =>
+      file.name.toLowerCase().endsWith('.html') ||
       file.name.toLowerCase().endsWith('.htm')
     )
   }
@@ -119,16 +108,16 @@ const RightPanel = ({ currentProject, width }) => {
   const togglePreview = () => {
     const newPreviewMode = !isPreviewMode
     setIsPreviewMode(newPreviewMode)
-    
+
     // When switching to preview mode, check for HTML files
     if (newPreviewMode) {
       const htmlFiles = getHtmlFiles()
-      
+
       if (htmlFiles.length === 0) {
         setPreviewError('No HTML files found in this project. Please generate an HTML file first.')
         return
       }
-      
+
       // If multiple HTML files, show selector
       if (htmlFiles.length > 1) {
         setShowFileSelector(true)
@@ -148,14 +137,14 @@ const RightPanel = ({ currentProject, width }) => {
 
   const loadHtmlFileForPreview = (file) => {
     if (!file) return
-    
+
     setPreviewLoading(true)
     setPreviewError(null)
-    
+
     // Use editor content if this is the currently selected file, otherwise use file content
     // Also update currentFiles to ensure we have the latest content
     const htmlContent = (file.path === selectedFile?.path ? editorContent : null) || file.content || ''
-    
+
     // Update the file in currentFiles cache if using editor content
     if (file.path === selectedFile?.path && editorContent) {
       setCurrentFiles(prev => ({
@@ -166,7 +155,7 @@ const RightPanel = ({ currentProject, width }) => {
         }
       }))
     }
-    
+
     setPreviewHtmlContent(htmlContent)
     setPreviewLoading(false)
   }
@@ -174,7 +163,7 @@ const RightPanel = ({ currentProject, width }) => {
   const handleHtmlFileSelect = (e) => {
     const filePath = e.target.value
     if (!filePath) return
-    
+
     const htmlFiles = getHtmlFiles()
     const selectedFile = htmlFiles.find(f => f.path === filePath)
     if (selectedFile) {
@@ -187,11 +176,11 @@ const RightPanel = ({ currentProject, width }) => {
     if (selectedHtmlFile) {
       setPreviewLoading(true)
       setPreviewError(null)
-      
+
       // Use editor content if the selected HTML file is currently being edited
-      const htmlContent = (selectedHtmlFile.path === selectedFile?.path ? editorContent : null) || 
-                         selectedHtmlFile.content || ''
-      
+      const htmlContent = (selectedHtmlFile.path === selectedFile?.path ? editorContent : null) ||
+        selectedHtmlFile.content || ''
+
       // Update the file in currentFiles cache if using editor content
       if (selectedHtmlFile.path === selectedFile?.path && editorContent) {
         setCurrentFiles(prev => ({
@@ -202,7 +191,7 @@ const RightPanel = ({ currentProject, width }) => {
           }
         }))
       }
-      
+
       setPreviewHtmlContent(htmlContent)
       setPreviewLoading(false)
     } else if (selectedFile && selectedFile.name.toLowerCase().endsWith('.html')) {
@@ -225,16 +214,16 @@ const RightPanel = ({ currentProject, width }) => {
 
   // Get all CSS files from the project
   const getCssFiles = () => {
-    return Object.values(currentFiles).filter(file => 
-      file.name.toLowerCase().endsWith('.css') || 
+    return Object.values(currentFiles).filter(file =>
+      file.name.toLowerCase().endsWith('.css') ||
       file.name.toLowerCase().endsWith('.scss')
     )
   }
 
   // Get all JS files from the project
   const getJsFiles = () => {
-    return Object.values(currentFiles).filter(file => 
-      file.name.toLowerCase().endsWith('.js') || 
+    return Object.values(currentFiles).filter(file =>
+      file.name.toLowerCase().endsWith('.js') ||
       file.name.toLowerCase().endsWith('.jsx') ||
       file.name.toLowerCase().endsWith('.mjs')
     )
@@ -243,13 +232,13 @@ const RightPanel = ({ currentProject, width }) => {
   // Extract HTML body content (everything between <body> tags or just the content if no body tag)
   const extractHtmlBody = (htmlContent) => {
     if (!htmlContent) return ''
-    
+
     // Check if content has <body> tag
     const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*)<\/body>/i)
     if (bodyMatch) {
       return bodyMatch[1]
     }
-    
+
     // Check if content has <html> structure but no body
     const htmlMatch = htmlContent.match(/<html[^>]*>([\s\S]*)<\/html>/i)
     if (htmlMatch) {
@@ -260,7 +249,7 @@ const RightPanel = ({ currentProject, width }) => {
       }
       return htmlMatch[1].trim()
     }
-    
+
     // If no structure, return as is (might be just body content)
     return htmlContent.trim()
   }
@@ -275,19 +264,19 @@ const RightPanel = ({ currentProject, width }) => {
   // Replace external file references in HTML with inline content
   const processHtmlReferences = (htmlContent) => {
     let processedHtml = htmlContent
-    
+
     // Replace <link rel="stylesheet"> tags with inline styles
     const cssFiles = getCssFiles()
     cssFiles.forEach(cssFile => {
       const fileName = cssFile.name
       const fileNameWithoutExt = fileName.replace(/\.(css|scss)$/i, '')
-      
+
       // Match various patterns: href="style.css", href="./style.css", href="/style.css", etc.
       const patterns = [
         new RegExp(`<link[^>]*href=["']([^"']*${fileName.replace(/\./g, '\\.')})["'][^>]*>`, 'gi'),
         new RegExp(`<link[^>]*href=["']([^"']*${fileNameWithoutExt.replace(/\./g, '\\.')}\\.css)["'][^>]*>`, 'gi')
       ]
-      
+
       patterns.forEach(pattern => {
         processedHtml = processedHtml.replace(pattern, (match) => {
           // Replace the link tag with inline style
@@ -295,19 +284,19 @@ const RightPanel = ({ currentProject, width }) => {
         })
       })
     })
-    
+
     // Replace <script src=""> tags with inline scripts
     const jsFiles = getJsFiles()
     jsFiles.forEach(jsFile => {
       const fileName = jsFile.name
       const fileNameWithoutExt = fileName.replace(/\.(js|jsx|mjs)$/i, '')
-      
+
       // Match various patterns: src="script.js", src="./script.js", src="/script.js", etc.
       const patterns = [
         new RegExp(`<script[^>]*src=["']([^"']*${fileName.replace(/\./g, '\\.')})["'][^>]*>\\s*</script>`, 'gi'),
         new RegExp(`<script[^>]*src=["']([^"']*${fileNameWithoutExt.replace(/\./g, '\\.')}\\.js)["'][^>]*>\\s*</script>`, 'gi')
       ]
-      
+
       patterns.forEach(pattern => {
         processedHtml = processedHtml.replace(pattern, (match) => {
           // Replace the script tag with inline script
@@ -315,34 +304,34 @@ const RightPanel = ({ currentProject, width }) => {
         })
       })
     })
-    
+
     return processedHtml
   }
 
   const createFullHtmlDocument = (htmlContent) => {
     if (!htmlContent) return ''
-    
+
     // Process HTML to replace external references
     let processedHtml = processHtmlReferences(htmlContent)
-    
+
     // Extract body content
     const bodyContent = extractHtmlBody(processedHtml)
     const title = extractTitle(processedHtml)
-    
+
     // Get all CSS and JS files
     const cssFiles = getCssFiles()
     const jsFiles = getJsFiles()
-    
+
     // Build CSS content
-    const cssContent = cssFiles.map(cssFile => 
+    const cssContent = cssFiles.map(cssFile =>
       `/* ${cssFile.name} */\n${cssFile.content}`
     ).join('\n\n')
-    
+
     // Build JS content
-    const jsContent = jsFiles.map(jsFile => 
+    const jsContent = jsFiles.map(jsFile =>
       `/* ${jsFile.name} */\n${jsFile.content}`
     ).join('\n\n')
-    
+
     // Build the complete HTML document
     let fullHtml = `<!DOCTYPE html>
 <html>
@@ -355,7 +344,7 @@ const RightPanel = ({ currentProject, width }) => {
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; line-height: 1.6; }
     </style>`
-    
+
     // Add CSS files if any
     if (cssContent) {
       fullHtml += `
@@ -363,12 +352,12 @@ const RightPanel = ({ currentProject, width }) => {
         ${cssContent}
     </style>`
     }
-    
+
     fullHtml += `
 </head>
 <body>
     ${bodyContent}`
-    
+
     // Add JS files if any
     if (jsContent) {
       fullHtml += `
@@ -376,11 +365,11 @@ const RightPanel = ({ currentProject, width }) => {
         ${jsContent}
     </script>`
     }
-    
+
     fullHtml += `
 </body>
 </html>`
-    
+
     return fullHtml
   }
 
@@ -445,7 +434,7 @@ const RightPanel = ({ currentProject, width }) => {
       const htmlContent = (selectedFile && selectedHtmlFile.path === selectedFile.path)
         ? editorContent
         : (currentFiles[selectedHtmlFile.path]?.content || selectedHtmlFile.content || '')
-      
+
       // Update preview - this will trigger createFullHtmlDocument which reads latest CSS/JS from currentFiles
       if (htmlContent) {
         setPreviewHtmlContent(htmlContent)
@@ -455,7 +444,7 @@ const RightPanel = ({ currentProject, width }) => {
 
   const renderPreview = () => {
     const htmlFiles = getHtmlFiles()
-    
+
     if (htmlFiles.length === 0) {
       return (
         <div className="preview-error">
@@ -499,8 +488,8 @@ const RightPanel = ({ currentProject, width }) => {
         {/* File Selector for Multiple HTML Files */}
         {showFileSelector && htmlFiles.length > 1 && (
           <div className="file-selector" id="fileSelector">
-            <select 
-              id="htmlFileSelect" 
+            <select
+              id="htmlFileSelect"
               onChange={handleHtmlFileSelect}
               value={selectedHtmlFile?.path || ''}
             >
@@ -513,7 +502,7 @@ const RightPanel = ({ currentProject, width }) => {
             </select>
           </div>
         )}
-        
+
         <iframe
           className="preview-iframe"
           srcDoc={fullHtml}
@@ -525,19 +514,19 @@ const RightPanel = ({ currentProject, width }) => {
 
   const handleDownloadProject = async () => {
     if (!currentProject?._id || isDownloading) return
-    
+
     try {
       setIsDownloading(true)
       const response = await apiService.downloadProjectZip(currentProject._id)
-      
+
       const blob = new Blob([response.data], { type: 'application/zip' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
-      
+
       const projectName = (currentProject.name || 'genforge-project')
         .replace(/[^a-z0-9_\-]+/gi, '-')
         .toLowerCase()
-      
+
       link.href = url
       link.download = `${projectName}.zip`
       document.body.appendChild(link)
@@ -552,21 +541,50 @@ const RightPanel = ({ currentProject, width }) => {
     }
   }
 
+  const [isEditing, setIsEditing] = useState(false)
+
+  const handleToggleEdit = async () => {
+    if (isEditing) {
+      // Save changes
+      if (currentProject && currentProject._id && selectedFile) {
+        try {
+          const response = await updateFile(
+            currentProject._id,
+            selectedFile.path,
+            editorContent
+          )
+          if (response.success) {
+            alert('Saved successfully!')
+            setIsEditing(false)
+          } else {
+            alert('Failed to save: ' + response.error)
+          }
+        } catch (error) {
+          console.error('Error saving file:', error)
+          alert('Error saving file')
+        }
+      }
+    } else {
+      // Enable edit mode
+      setIsEditing(true)
+    }
+  }
+
   return (
-    <div 
-      className="right-panel" 
+    <div
+      className="right-panel"
       id="rightPanel"
       style={{ width: `${width}%` }}
     >
       <div className="options-bar">
         <div className="options-left">
-          <div 
+          <div
             className={`files-option-button ${showFileSidebar ? 'active' : ''}`}
             onClick={toggleFileSidebar}
           >
             <i className="fas fa-code fa-lg"></i>
           </div>
-          <div 
+          <div
             className={`view-toggle-button ${isPreviewMode ? 'active' : ''}`}
             onClick={togglePreview}
           >
@@ -574,9 +592,19 @@ const RightPanel = ({ currentProject, width }) => {
           </div>
         </div>
         <div className="options-title">
-          {isPreviewMode ? 'Preview' : 'Code Editor'}
+          {isPreviewMode ? 'Preview' : (isEditing ? 'Editing...' : 'Code Editor (Read Only)')}
         </div>
         <div className="options-right">
+          {!isPreviewMode && (
+            <button
+              className={`preview-button ${isEditing ? 'primary' : 'secondary'}`}
+              onClick={handleToggleEdit}
+              style={{ marginRight: '10px' }}
+            >
+              <i className={`fas ${isEditing ? 'fa-save' : 'fa-edit'}`}></i>
+              {isEditing ? 'Save' : 'Edit'}
+            </button>
+          )}
           <button
             className="preview-button secondary"
             onClick={handleDownloadProject}
@@ -588,16 +616,16 @@ const RightPanel = ({ currentProject, width }) => {
           </button>
         </div>
       </div>
-      
+
       {/* File Sidebar */}
-      <div 
-        id="fileSidebar" 
+      <div
+        id="fileSidebar"
         className={`file-sidebar ${showFileSidebar ? 'file-sidebar-visible' : 'file-sidebar-hidden'}`}
       >
         <div className="file-sidebar-header">
           <h3>Files</h3>
-          <button 
-            className="file-sidebar-close-btn" 
+          <button
+            className="file-sidebar-close-btn"
             onClick={() => setShowFileSidebar(false)}
             title="Close Sidebar"
           >
@@ -606,7 +634,7 @@ const RightPanel = ({ currentProject, width }) => {
         </div>
         <div className="file-list" id="fileList">
           {Object.values(currentFiles).map((file) => (
-            <div 
+            <div
               key={file.path}
               className={`file-item ${selectedFile?.path === file.path ? 'active' : ''}`}
               onClick={() => handleFileSelect(file)}
@@ -619,8 +647,8 @@ const RightPanel = ({ currentProject, width }) => {
       </div>
 
       {/* Monaco Editor Container */}
-      <div 
-        id="monacoEditorContainer" 
+      <div
+        id="monacoEditorContainer"
         className={`monaco-editor-container ${showFileSidebar ? 'editor-with-sidebar' : ''}`}
         style={{ display: isPreviewMode ? 'none' : 'block' }}
       >
@@ -637,7 +665,7 @@ const RightPanel = ({ currentProject, width }) => {
             lineNumbers: 'on',
             roundedSelection: false,
             scrollBeyondLastLine: false,
-            readOnly: false,
+            readOnly: !isEditing,
             cursorStyle: 'line',
             scrollbar: {
               vertical: 'visible',
@@ -649,10 +677,10 @@ const RightPanel = ({ currentProject, width }) => {
           }}
         />
       </div>
-      
+
       {/* Preview Container */}
-      <div 
-        id="previewContainer" 
+      <div
+        id="previewContainer"
         className="preview-container"
         style={{ display: isPreviewMode ? 'flex' : 'none' }}
       >
@@ -676,7 +704,7 @@ const RightPanel = ({ currentProject, width }) => {
             </button>
           </div>
         </div>
-        
+
         {renderPreview()}
       </div>
     </div>

@@ -15,6 +15,7 @@ import archiver from 'archiver';
 
 import runAgent from './agent.js';
 import { connectDB, User, Project } from './models/index.js';
+import * as ragService from './services/ragService.js';
 
 dotenv.config();
 
@@ -50,7 +51,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'genforge-secret-key',
   resave: false,
   saveUninitialized: false,
-  cookie: { 
+  cookie: {
     secure: false, // Set to true in production with HTTPS
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
@@ -75,10 +76,10 @@ let currentApiKey = null;
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     // Find user by email
     const user = await User.findOne({ email: email });
-    
+
     if (user && await user.comparePassword(password)) {
       // Update last login
       user.lastLogin = new Date();
@@ -94,14 +95,14 @@ app.post('/login', async (req, res) => {
       req.session.apiKey = userApiKey || null;
       currentApiKey = userApiKey || currentApiKey;
 
-      return res.json({ 
-        success: true, 
-        user: { 
-          id: user._id, 
-          username: user.username, 
+      return res.json({
+        success: true,
+        user: {
+          id: user._id,
+          username: user.username,
           email: user.email,
           hasApiKey: !!userApiKey
-        } 
+        }
       });
     } else {
       return res.status(401).json({ success: false, error: 'Invalid email or password' });
@@ -115,7 +116,7 @@ app.post('/login', async (req, res) => {
 app.post('/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    
+
     // Check if user already exists
     const existingUser = await User.findOne({ email: email });
     if (existingUser) {
@@ -124,26 +125,26 @@ app.post('/signup', async (req, res) => {
         error: 'User with this email already exists'
       });
     }
-    
+
     // Create new user
     const newUser = new User({
       username: name, // Using name as username for now
       email,
       password
     });
-    
+
     await newUser.save();
     req.session.userId = newUser._id;
     // New users start without an API key
     req.session.apiKey = null;
-    return res.json({ 
-      success: true, 
-      user: { 
-        id: newUser._id, 
-        username: newUser.username, 
+    return res.json({
+      success: true,
+      user: {
+        id: newUser._id,
+        username: newUser.username,
         email: newUser.email,
         hasApiKey: false
-      } 
+      }
     });
   } catch (error) {
     console.error('Signup error:', error);
@@ -169,11 +170,11 @@ app.post('/logout', (req, res) => {
 app.post('/api/generate-prompt', requireAuth, async (req, res) => {
   try {
     const { prompt } = req.query;
-    
+
     if (!prompt) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Prompt is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'Prompt is required'
       });
     }
 
@@ -209,7 +210,7 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
 
     // Call runAgent function with the prompt and get structured response
     const agentResponse = await runAgent(prompt, apiKeyToUse);
-    
+
     // Generate a meaningful project name from the prompt
     // Extract first few words from prompt, or use a default name
     const generateProjectName = (prompt) => {
@@ -240,7 +241,7 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
 
     // Add initial chat message
     await project.addChatMessage('user', prompt);
-    
+
     // Add all agent messages as assistant messages
     if (agentResponse.messages && agentResponse.messages.length > 0) {
       console.log(`📝 Saving ${agentResponse.messages.length} assistant messages to database`);
@@ -260,18 +261,34 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
           const fileExtension = fileOp.name.split('.').pop() || 'txt';
           await project.addFile(fileOp.name, fileOp.path, fileOp.content, fileExtension);
           console.log(`✅ Saved file: ${fileOp.name} (${fileExtension})`);
+
+          // Index the file for RAG
+          try {
+            await ragService.reIndexFile(project._id, fileOp.path, fileOp.content);
+            console.log(`🔍 Indexed file for RAG: ${fileOp.name}`);
+          } catch (indexErr) {
+            console.error(`❌ Failed to index file ${fileOp.name}:`, indexErr);
+          }
         }
         // Also handle create_file operations
         else if (fileOp.type === 'create_file' && fileOp.content) {
           const fileExtension = fileOp.name.split('.').pop() || 'txt';
           await project.addFile(fileOp.name, fileOp.path, fileOp.content, fileExtension);
           console.log(`✅ Saved file: ${fileOp.name} (${fileExtension})`);
+
+          // Index the file for RAG
+          try {
+            await ragService.reIndexFile(project._id, fileOp.path, fileOp.content);
+            console.log(`🔍 Indexed file for RAG: ${fileOp.name}`);
+          } catch (indexErr) {
+            console.error(`❌ Failed to index file ${fileOp.name}:`, indexErr);
+          }
         }
       }
     }
 
     await project.save();
-    
+
     // Log key parts of the agent response for debugging/visibility
     try {
       console.log('Agent response summary:', {
@@ -285,7 +302,7 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
     } catch (logErr) {
       console.warn('Failed to log agent response:', logErr);
     }
-    
+
     res.json({
       success: true,
       projectId: projectId,
@@ -294,10 +311,10 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
       finalMessage: agentResponse.finalMessage,
       databaseProjectId: project._id
     });
-    
+
   } catch (error) {
     console.error('Generation error:', error);
-    
+
     // Handle specific API errors
     if (error.message === 'API_QUOTA_EXCEEDED') {
       res.status(429).json({
@@ -318,8 +335,8 @@ app.post('/api/generate-prompt', requireAuth, async (req, res) => {
         message: error.message.replace('API_ERROR: ', '')
       });
     } else {
-    res.status(500).json({
-      success: false,
+      res.status(500).json({
+        success: false,
         error: 'GENERATION_ERROR',
         message: 'An error occurred during generation'
       });
@@ -429,20 +446,20 @@ app.get('/api/user', requireAuth, async (req, res) => {
     if (user && typeof user.getApiKey === 'function') {
       hasApiKey = !!user.getApiKey();
     }
-    res.json({ 
-      success: true, 
-      user: { 
-        id: user._id, 
-        username: user.username, 
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        username: user.username,
         email: user.email,
         hasApiKey
       }
     });
   } catch (error) {
     console.error('User API error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to fetch user data' 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user data'
     });
   }
 });
@@ -453,7 +470,7 @@ app.get('/api/projects', requireAuth, async (req, res) => {
     const projects = await Project.find({ userId: req.session.userId })
       .sort({ updatedAt: -1 })
       .select('name description projectType status createdAt updatedAt');
-    
+
     res.json({
       success: true,
       projects
@@ -471,18 +488,18 @@ app.get('/api/projects', requireAuth, async (req, res) => {
 app.get('/api/project/:projectId', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const project = await Project.findOne({ 
-      _id: projectId, 
-      userId: req.session.userId 
+    const project = await Project.findOne({
+      _id: projectId,
+      userId: req.session.userId
     });
-    
+
     if (!project) {
       return res.status(404).json({
         success: false,
         error: 'Project not found'
       });
     }
-    
+
     res.json({
       success: true,
       project
@@ -500,11 +517,11 @@ app.get('/api/project/:projectId', requireAuth, async (req, res) => {
 app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const project = await Project.findOne({ 
-      _id: projectId, 
-      userId: req.session.userId 
+    const project = await Project.findOne({
+      _id: projectId,
+      userId: req.session.userId
     });
-    
+
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -540,7 +557,7 @@ app.get('/api/project-data/:projectId', requireAuth, async (req, res) => {
         updatedAt: project.updatedAt
       }
     };
-    
+
     res.json({
       success: true,
       projectStructure: virtualProjectStructure
@@ -591,21 +608,21 @@ app.post('/api/project/:projectId/chat', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { role, content } = req.body;
-    
-    const project = await Project.findOne({ 
-      _id: projectId, 
-      userId: req.session.userId 
+
+    const project = await Project.findOne({
+      _id: projectId,
+      userId: req.session.userId
     });
-    
+
     if (!project) {
       return res.status(404).json({
         success: false,
         error: 'Project not found'
       });
     }
-    
+
     await project.addChatMessage(role, content);
-    
+
     res.json({
       success: true,
       message: 'Chat message added successfully'
@@ -623,28 +640,28 @@ app.post('/api/project/:projectId/chat', requireAuth, async (req, res) => {
 app.delete('/api/project/:projectId', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
-    
+
     // Find the project and ensure it belongs to the user
-    const project = await Project.findOne({ 
-      _id: projectId, 
-      userId: req.session.userId 
+    const project = await Project.findOne({
+      _id: projectId,
+      userId: req.session.userId
     });
-    
+
     if (!project) {
       return res.status(404).json({
         success: false,
         error: 'Project not found'
       });
     }
-    
+
     // Store project name for logging
     const projectName = project.name;
-    
+
     // Delete the project from database
     await Project.findByIdAndDelete(projectId);
-    
+
     console.log(`🗑️ Project "${projectName}" (${projectId}) deleted by user ${req.session.userId}`);
-    
+
     res.json({
       success: true,
       message: 'Project deleted successfully',
@@ -663,7 +680,7 @@ app.delete('/api/project/:projectId', requireAuth, async (req, res) => {
 app.post('/api/update-api-key', requireAuth, (req, res) => {
   try {
     const { apiKey } = req.body;
-    
+
     if (!apiKey) {
       return res.status(400).json({
         success: false,
@@ -703,7 +720,7 @@ app.post('/api/update-api-key', requireAuth, (req, res) => {
           error: 'Failed to update API key'
         });
       });
-    
+
   } catch (error) {
     console.error('API key update error:', error);
     res.status(500).json({
@@ -718,7 +735,7 @@ app.post('/api/update-file/:projectId', requireAuth, async (req, res) => {
   try {
     const { projectId } = req.params;
     const { filePath, content } = req.body;
-    
+
     if (!filePath || content === undefined) {
       return res.status(400).json({
         success: false,
@@ -728,14 +745,14 @@ app.post('/api/update-file/:projectId', requireAuth, async (req, res) => {
 
     // Check if this is a database project ID (MongoDB ObjectId format)
     const isDatabaseProject = /^[0-9a-fA-F]{24}$/.test(projectId);
-    
+
     if (isDatabaseProject) {
       // Update file in database
-      const project = await Project.findOne({ 
-        _id: projectId, 
-        userId: req.session.userId 
+      const project = await Project.findOne({
+        _id: projectId,
+        userId: req.session.userId
       });
-      
+
       if (!project) {
         return res.status(404).json({
           success: false,
@@ -754,7 +771,16 @@ app.post('/api/update-file/:projectId', requireAuth, async (req, res) => {
 
       // Update file content
       await project.updateFile(file._id, content);
-      
+
+      // Re-index the file for RAG
+      try {
+        await ragService.reIndexFile(projectId, filePath, content);
+        console.log(`🔄 Re-indexed file after manual update: ${filePath}`);
+      } catch (reIndexError) {
+        console.error(`❌ Failed to re-index file ${filePath}:`, reIndexError);
+        // We don't fail the request if re-indexing fails, but we log it
+      }
+
       res.json({
         success: true,
         message: 'File updated successfully in database',
@@ -768,12 +794,95 @@ app.post('/api/update-file/:projectId', requireAuth, async (req, res) => {
         error: 'Project not found. All projects are now stored in the database.'
       });
     }
-    
+
   } catch (error) {
     console.error('File update error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update file'
+    });
+  }
+});
+
+// AI Code Update Endpoint (RAG-based)
+app.post('/api/chat/update-code', requireAuth, async (req, res) => {
+  try {
+    const { projectId, prompt } = req.body;
+
+    if (!projectId || !prompt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID and prompt are required'
+      });
+    }
+
+    // 1. Find relevant code
+    console.log(`🔍 Searching for code relevant to: "${prompt}"`);
+    const relevantChunks = await ragService.findRelevantCode(prompt, projectId);
+
+    if (!relevantChunks || relevantChunks.length === 0) {
+      return res.json({
+        success: false,
+        message: "No relevant code found for this request.",
+        action: "none"
+      });
+    }
+
+    // Take the top match
+    const bestMatch = relevantChunks[0];
+    console.log(`🎯 Found match: ${bestMatch.filePath} (Score: ${bestMatch.score})`);
+
+    // 2. Fetch full file content
+    const project = await Project.findOne({ _id: projectId, userId: req.session.userId });
+    if (!project) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const file = project.files.find(f => f.path === bestMatch.filePath);
+    if (!file) return res.status(404).json({ success: false, error: 'File not found in project' });
+
+    // 3. Generate Patch
+    console.log(`🤖 Generating patch for ${bestMatch.filePath}...`);
+    // We pass the specific chunk content to context, but maybe we should pass a bit more?
+    // For now, let's pass the chunk content + prompt.
+    // Ideally, we should pass the function context.
+    const newCodeBlock = await ragService.generatePatch(bestMatch.content, prompt);
+
+    // 4. Apply Patch
+    console.log(`🩹 Applying patch...`);
+    const updatedFullContent = ragService.applyPatch(
+      file.content,
+      bestMatch.startLine,
+      bestMatch.endLine,
+      newCodeBlock
+    );
+
+    // 5. Save to MongoDB
+    await project.updateFile(file._id, updatedFullContent);
+    console.log(`💾 Saved to MongoDB`);
+
+    // Save chat messages
+    await project.addChatMessage('user', prompt);
+    const responseMessage = `I've updated ${bestMatch.filePath} based on your request.`;
+    await project.addChatMessage('assistant', responseMessage);
+    console.log(`💬 Saved chat messages`);
+
+    // 6. Re-index Vector DB (Background)
+    // We don't await this to keep response fast, but for reliability in this demo we might want to.
+    // Let's await it to be safe.
+    await ragService.reIndexFile(projectId, bestMatch.filePath, updatedFullContent);
+    console.log(`🔄 Re-indexing complete`);
+
+    res.json({
+      success: true,
+      message: responseMessage,
+      file: bestMatch.filePath,
+      preview: newCodeBlock
+    });
+
+  } catch (error) {
+    console.error('Update code error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update code'
     });
   }
 });

@@ -9,7 +9,7 @@ const projectVectorSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['function', 'class', 'component', 'file', 'other'],
+        enum: ['function', 'class', 'component', 'file', 'chunk', 'other'],
         required: true
     },
     name: {
