@@ -2,23 +2,25 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import { z } from "zod";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage } from "@langchain/core/messages";
 import { StateGraph, END } from "@langchain/langgraph";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import readline from 'readline';
 import fs from 'fs';
 import path from 'path';
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 
 // --- Configuration ---
 const LOCAL_MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/genforge";
 const ATLAS_MONGO_URI = process.env.MONGODB_URI_VECTOR;
+const DEFAULT_DELAY_MS = 2000; // Reduced delay since we are not using LLM for chunking
 
 if (!ATLAS_MONGO_URI) {
     console.error("Error: MONGODB_URI_VECTOR is not defined in .env");
     process.exit(1);
 }
 
-// --- Schemas (Re-defined to bind to specific connections) ---
+// --- Schemas ---
 
 // 1. Project Schema (For Local DB)
 const fileSchema = new mongoose.Schema({
@@ -51,7 +53,7 @@ const projectVectorSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['function', 'class', 'component', 'file', 'other'],
+        enum: ['function', 'class', 'component', 'file', 'chunk', 'other'],
         required: true
     },
     name: { type: String, required: true },
@@ -64,7 +66,7 @@ const projectVectorSchema = new mongoose.Schema({
     startLine: Number,
     endLine: Number,
     createdAt: { type: Date, default: Date.now }
-}, { collection: 'genforge_vectorDB' });
+}, { collection: 'Projects' });
 
 // --- Database Connections ---
 let localConn;
@@ -79,32 +81,104 @@ async function initConnections() {
         LocalProjectModel = localConn.model('Project', projectSchema);
     }
     if (!atlasConn) {
-        atlasConn = await mongoose.createConnection(ATLAS_MONGO_URI).asPromise();
-        console.log("Connected to Atlas MongoDB");
+        atlasConn = await mongoose.createConnection(ATLAS_MONGO_URI, { dbName: 'GenForge_VectorDB' }).asPromise();
+        console.log("Connected to Atlas MongoDB (GenForge_VectorDB)");
         AtlasVectorModel = atlasConn.model('ProjectVector', projectVectorSchema);
     }
 }
 
-// --- Model Setup ---
-function getModel() {
-    if (process.env.GOOGLE_API_KEY) {
-        return new ChatGoogleGenerativeAI({
-            model: "gemini-2.0-flash-exp",
-            temperature: 0,
-            apiKey: process.env.GOOGLE_API_KEY
-        });
+// --- Helper Functions ---
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function retryWithBackoff(fn, retries = 5, fallbackDelay = 5000) {
+    let currentDelay = fallbackDelay;
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            const errorMessage = error.message || "";
+            if (errorMessage.includes("429") || errorMessage.includes("Quota exceeded")) {
+                console.warn(`    ! Rate limit hit (Attempt ${i + 1}/${retries}).`);
+                const match = errorMessage.match(/Please retry in (\d+(\.\d+)?)s/);
+                let waitTime = currentDelay;
+                if (match && match[1]) {
+                    waitTime = Math.ceil(parseFloat(match[1]) * 1000) + 2000;
+                    console.warn(`    ! API requested wait: ${match[1]}s. Sleeping for ${(waitTime / 1000).toFixed(1)}s...`);
+                    currentDelay = fallbackDelay;
+                } else {
+                    console.warn(`    ! No wait time specified. Sleeping for ${(waitTime / 1000).toFixed(1)}s...`);
+                    currentDelay *= 1.5;
+                }
+                await sleep(waitTime);
+            } else {
+                throw error;
+            }
+        }
     }
-    throw new Error("No GOOGLE_API_KEY found.");
+    throw new Error(`Failed after ${retries} retries.`);
 }
 
 function getEmbeddings() {
     if (process.env.GOOGLE_API_KEY) {
         return new GoogleGenerativeAIEmbeddings({
             apiKey: process.env.GOOGLE_API_KEY,
-            modelName: "embedding-001"
+            modelName: "text-embedding-004"
         });
     }
     throw new Error("No GOOGLE_API_KEY found for Embeddings.");
+}
+
+// --- Local Chunking Logic ---
+// --- Local Chunking Logic (Recursive Character Splitting) ---
+async function splitDocument(content, filename) {
+    const ext = path.extname(filename).toLowerCase();
+
+    let language;
+    switch (ext) {
+        case '.js':
+        case '.jsx':
+        case '.ts':
+        case '.tsx':
+            language = "js";
+            break;
+        case '.py':
+            language = "python";
+            break;
+        case '.java':
+            language = "java";
+            break;
+        case '.html':
+            language = "html";
+            break;
+        // case '.css': // CSS not supported by fromLanguage in this version
+        //     language = "css";
+        //     break;
+        default:
+            language = null; // Default to generic splitter
+    }
+
+    let splitter;
+    if (language) {
+        splitter = RecursiveCharacterTextSplitter.fromLanguage(language, {
+            chunkSize: 1000,
+            chunkOverlap: 200,
+        });
+    } else {
+        splitter = new RecursiveCharacterTextSplitter({
+            chunkSize: 1000,
+            chunkOverlap: 200,
+        });
+    }
+
+    const docs = await splitter.createDocuments([content]);
+
+    // Map back to our chunk format
+    return docs.map((doc, index) => ({
+        type: 'chunk', // Recursive splitter doesn't give us semantic types like 'function' easily without AST
+        name: `${path.basename(filename)} - Chunk ${index + 1}`,
+        content: doc.pageContent,
+        startLine: doc.metadata.loc ? doc.metadata.loc.lines.from : undefined
+    }));
 }
 
 // --- State Definition ---
@@ -112,14 +186,6 @@ const stateChannels = {
     projectId: {
         value: (x, y) => y || x,
         default: () => null
-    },
-    projectFiles: {
-        value: (x, y) => y || x,
-        default: () => []
-    },
-    chunks: {
-        value: (x, y) => y || x,
-        default: () => []
     },
     status: {
         value: (x, y) => y,
@@ -129,99 +195,71 @@ const stateChannels = {
 
 // --- Nodes ---
 
-// 1. Retrieve Project from Local DB
-async function retrieveProject(state) {
-    console.log("--- Node: Retrieve Project (Local) ---");
+// Unified Node: Retrieve -> Chunk (Local) -> Embed -> Store (Sequentially)
+async function processProjectFiles(state) {
+    console.log("--- Node: Process Project Files Sequentially (Recursive Chunking) ---");
     const { projectId } = state;
     await initConnections();
 
+    // 1. Retrieve Project
     const project = await LocalProjectModel.findById(projectId);
     if (!project) throw new Error(`Project not found in Local DB: ${projectId}`);
-
     console.log(`Retrieved project: ${project.name} (${project.files.length} files)`);
-    return { projectFiles: project.files };
-}
 
-// 2. Semantic Chunking (Gemini)
-async function semanticChunking(state) {
-    console.log("--- Node: Semantic Chunking ---");
-    const { projectFiles } = state;
-    const model = getModel();
-    const allChunks = [];
+    // 2. Clear existing vectors
+    await AtlasVectorModel.deleteMany({ projectId: projectId });
+    console.log("Cleared existing vectors for this project.");
 
-    for (const file of projectFiles) {
+    const embeddingsModel = getEmbeddings();
+
+    // 3. Process Files One by One
+    for (const [index, file] of project.files.entries()) {
         if (!['.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.py', '.java'].includes(path.extname(file.filename))) {
             continue;
         }
 
-        console.log(`Chunking file: ${file.filename}`);
+        console.log(`\n[${index + 1}/${project.files.length}] Processing file: ${file.filename}`);
 
-        const prompt = `
-        Analyze the following code file: "${file.filename}"
-        
-        CODE:
-        ${file.content}
-        
-        Extract all logical units: functions, classes, and major components.
-        Return a JSON ARRAY of objects. Each object must have:
-        - "type": "function" | "class" | "component" | "other"
-        - "name": Name of the unit
-        - "content": The exact code block
-        - "startLine": approximate start line number (optional)
-        
-        If the file is small or has no distinct functions, return the whole file as one chunk with type "file".
-        Ensure valid JSON output only. No markdown formatting.
-        `;
-
+        // A. Recursive Chunking
+        let fileChunks = [];
         try {
-            const response = await model.invoke([new HumanMessage(prompt)]);
-            let content = response.content.replace(/```json/g, "").replace(/```/g, "").trim();
+            fileChunks = await splitDocument(file.content, file.filename);
 
-            const fileChunks = JSON.parse(content);
-
-            fileChunks.forEach(chunk => {
-                chunk.filePath = file.path;
-                allChunks.push(chunk);
-            });
+            // Normalize chunks
+            fileChunks = fileChunks.map(chunk => ({
+                ...chunk,
+                filePath: file.path
+            }));
 
         } catch (e) {
             console.error(`Error chunking ${file.filename}:`, e.message);
-            allChunks.push({
+            fileChunks = [{
                 type: "file",
                 name: file.filename,
                 content: file.content,
                 filePath: file.path
-            });
+            }];
         }
-    }
 
-    console.log(`Generated ${allChunks.length} semantic chunks.`);
-    return { chunks: allChunks };
-}
+        console.log(`  - Generated ${fileChunks.length} chunks (Recursive).`);
 
-// 3. Embed and Store (Atlas DB)
-async function embedAndStore(state) {
-    console.log("--- Node: Embed and Store (Atlas) ---");
-    const { chunks, projectId } = state;
-    const embeddingsModel = getEmbeddings();
+        // B. Embed and Store Immediately
+        if (fileChunks.length > 0) {
+            const texts = fileChunks.map(c => c.content);
+            console.log(`    > Debug: Embedding ${texts.length} texts. First text preview: "${texts[0].substring(0, 50)}..."`);
 
-    await initConnections();
+            try {
+                // Embeddings API call (Higher limits, but still safe to retry)
+                const embeddings = await retryWithBackoff(async () => {
+                    return await embeddingsModel.embedDocuments(texts);
+                }, 5, 2000);
 
-    // Clear existing vectors for this project in Atlas
-    await AtlasVectorModel.deleteMany({ projectId: projectId });
+                console.log(`    > Debug: Received ${embeddings ? embeddings.length : 'null'} embeddings.`);
+                if (embeddings && embeddings.length > 0) {
+                    console.log(`    > Debug: First embedding length: ${embeddings[0] ? embeddings[0].length : 'null'}`);
+                }
 
-    const vectorDocs = [];
-    const BATCH_SIZE = 5;
-
-    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-        const batch = chunks.slice(i, i + BATCH_SIZE);
-        const texts = batch.map(c => c.content);
-
-        try {
-            const embeddings = await embeddingsModel.embedDocuments(texts);
-
-            batch.forEach((chunk, idx) => {
-                vectorDocs.push({
+                const vectorDocs = fileChunks.map((chunk, idx) => ({
                     projectId: projectId,
                     type: chunk.type,
                     name: chunk.name,
@@ -229,17 +267,20 @@ async function embedAndStore(state) {
                     embedding: embeddings[idx],
                     filePath: chunk.filePath,
                     startLine: chunk.startLine
-                });
-            });
-            console.log(`Embedded batch ${i / BATCH_SIZE + 1}`);
-        } catch (e) {
-            console.error("Embedding Error:", e.message);
-        }
-    }
+                }));
 
-    if (vectorDocs.length > 0) {
-        await AtlasVectorModel.insertMany(vectorDocs);
-        console.log(`Stored ${vectorDocs.length} vectors in MongoDB Atlas.`);
+                await AtlasVectorModel.insertMany(vectorDocs);
+                console.log(`  - Stored ${vectorDocs.length} vectors.`);
+
+            } catch (e) {
+                console.error(`  - Embedding/Storage Error for ${file.filename}:`, e.message);
+            }
+        }
+
+        // C. Small courtesy delay
+        if (index < project.files.length - 1) {
+            await sleep(DEFAULT_DELAY_MS);
+        }
     }
 
     return { status: "completed" };
@@ -248,14 +289,10 @@ async function embedAndStore(state) {
 // --- Graph Construction ---
 const workflow = new StateGraph({ channels: stateChannels });
 
-workflow.addNode("retrieve", retrieveProject);
-workflow.addNode("chunk", semanticChunking);
-workflow.addNode("embed_store", embedAndStore);
+workflow.addNode("process_files", processProjectFiles);
 
-workflow.setEntryPoint("retrieve");
-workflow.addEdge("retrieve", "chunk");
-workflow.addEdge("chunk", "embed_store");
-workflow.addEdge("embed_store", END);
+workflow.setEntryPoint("process_files");
+workflow.addEdge("process_files", END);
 
 // --- Execution ---
 async function main() {
@@ -268,7 +305,7 @@ async function main() {
 
     const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve));
 
-    console.log("\n--- RAG Ingestion Pipeline (Dual DB) ---");
+    console.log("\n--- RAG Ingestion Pipeline (Local Chunking + Atlas) ---");
 
     if (!process.env.GOOGLE_API_KEY) {
         const apiKey = await askQuestion("Enter GOOGLE_API_KEY: ");
