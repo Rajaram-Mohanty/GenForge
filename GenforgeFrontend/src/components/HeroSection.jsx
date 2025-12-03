@@ -9,12 +9,12 @@ const HeroSection = () => {
       <div className="hero-content">
         <div className="hero-text">
           <h1 className="hero-title">
-            Build Applications with 
+            Build Applications with
             <span className="gradient-text"> AI Power</span>
           </h1>
           <p className="hero-subtitle">
-            Transform your ideas into fully functional applications using the power of AI. 
-            Generate, download, and deploy complete project structures with just a prompt.
+            Transform your ideas into fully functional applications using the power of AI.
+            Generate and download complete project structures with just a prompt.
           </p>
           <div className="hero-buttons">
             {isAuthenticated ? (
@@ -28,10 +28,7 @@ const HeroSection = () => {
                 Get Started Free
               </Link>
             )}
-            <a href="#features" className="btn btn-outline btn-large">
-              <i className="fas fa-play"></i>
-              Watch Demo
-            </a>
+
           </div>
         </div>
         <div className="hero-visual">
@@ -47,8 +44,8 @@ const HeroSection = () => {
               </div>
               <div className="code-content">
                 <div className="code-line">
-                  <span className="code-keyword">const</span> 
-                  <span className="code-variable"> app</span> = 
+                  <span className="code-keyword">const</span>
+                  <span className="code-variable"> app</span> =
                   <span className="code-function"> express</span>();
                 </div>
                 <div className="code-line">

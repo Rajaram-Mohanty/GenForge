@@ -12,10 +12,13 @@ body {
     position: sticky;
     top: 0;
     z-index: 1000;
-    background: var(--bg-card);
-    backdrop-filter: blur(20px);
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
-    padding: 0.75rem 0rem;
+    padding: 0;
+    height: 72px;
+    display: flex;
+    align-items: center;
     /* Increased padding */
 }
 
@@ -27,6 +30,8 @@ body {
     /* Increased max-width */
     margin: 0 auto;
     padding: 0rem 2rem;
+    height: 100%;
+    width: 100%;
 }
 
 .options {
@@ -104,7 +109,7 @@ body {
     width: 300px;
     /* Fixed width */
     height: 100%;
-    background: #1e293b;
+    background: var(--bg-secondary);
     color: #fff;
     box-shadow: 4px 0 15px rgba(0, 0, 0, 0.3);
     z-index: 1000;
@@ -130,7 +135,7 @@ body {
     align-items: center;
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .sidebar-header h3 {
@@ -150,7 +155,7 @@ body {
 }
 
 .new-chat-btn {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: var(--primary-gradient);
     border: none;
     color: white;
     cursor: pointer;
@@ -167,7 +172,7 @@ body {
 }
 
 .new-chat-btn:hover {
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
@@ -271,9 +276,9 @@ body {
 }
 
 #chatList li.active {
-    background-color: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-    border-color: rgba(59, 130, 246, 0.3);
+    background-color: rgba(249, 115, 22, 0.15);
+    color: #f97316;
+    border-color: rgba(249, 115, 22, 0.3);
 }
 
 .project-info {
@@ -717,7 +722,7 @@ body {
     justify-content: space-between;
     gap: 1rem;
     padding: 0.75rem 1rem;
-    background: #2a2a2a;
+    background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
     backdrop-filter: blur(10px);
     position: relative;
@@ -745,13 +750,13 @@ body {
 
 .files-option-button:hover,
 .view-toggle-button:hover {
-    background: rgba(59, 130, 246, 0.2);
-    color: #3b82f6;
+    background: rgba(249, 115, 22, 0.2);
+    color: #f97316;
 }
 
 .files-option-button.active,
 .view-toggle-button.active {
-    background: #3b82f6;
+    background: #f97316;
     color: #ffffff;
 }
 
@@ -761,8 +766,14 @@ body {
     color: var(--text-primary);
 }
 
+.options-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
 .monaco-editor-container {
-    background: #1e1e1e;
+    background: var(--bg-primary);
     flex: 1;
     width: 100%;
     overflow: hidden;
@@ -783,7 +794,7 @@ body {
     left: 0;
     width: 250px;
     height: 100%;
-    background: #1e293b;
+    background: var(--bg-secondary);
     color: #fff;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
     z-index: 100;
@@ -802,7 +813,7 @@ body {
 
 .file-sidebar-header {
     padding: 1rem;
-    border-bottom: 1px solid #374151;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -964,12 +975,12 @@ body {
 }
 
 .file-item:hover {
-    background-color: #374151;
+    background-color: rgba(255, 255, 255, 0.1);
     color: #fff;
 }
 
 .file-item.active {
-    background-color: #3b82f6;
+    background-color: #f97316;
     color: white;
 }
 
@@ -994,7 +1005,7 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: #ffffff;
+    background: var(--bg-primary);
     overflow: hidden;
 }
 
@@ -1003,15 +1014,15 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 0.75rem 1rem;
-    background: #f1f5f9;
-    border-bottom: 1px solid #e2e8f0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .preview-title {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #475569;
+    color: var(--text-primary);
     font-weight: 600;
     font-size: 0.9rem;
 }
@@ -1023,9 +1034,9 @@ body {
 
 .preview-button {
     padding: 6px 12px;
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #475569;
+    border: none;
+    background: #f97316;
+    color: white;
     border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
@@ -1036,9 +1047,8 @@ body {
 }
 
 .preview-button:hover {
-    background: #f8fafc;
-    border-color: #94a3b8;
-    color: #1e293b;
+    background: #ea580c;
+    color: white;
 }
 
 .preview-content {

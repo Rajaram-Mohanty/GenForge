@@ -12,7 +12,7 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="nav-container">
         <div className="nav-logo">
-          <h2><Link to="/" style={{textDecoration: 'none', color: 'inherit'}}>GenForge</Link></h2>
+          <h2><Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>Gen<span style={{ color: '#f97316' }}>Forge</span></Link></h2>
         </div>
         <div className="nav-menu">
           {isAuthenticated ? (

@@ -6,7 +6,7 @@ const Footer = () => {
       <div className="container">
         <div className="footer-content">
           <div className="footer-brand">
-            <h3>GenForge</h3>
+            <h3>Gen<span style={{ color: '#f97316' }}>Forge</span></h3>
             <p>AI-powered development platform</p>
           </div>
           <div className="footer-links">

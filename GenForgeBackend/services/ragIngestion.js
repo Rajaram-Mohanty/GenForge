@@ -19,7 +19,7 @@ import path from 'path';
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 
 // --- Configuration ---
-const LOCAL_MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/genforge";
+const LOCAL_MONGO_URI = process.env.MONGODB_URI;
 const ATLAS_MONGO_URI = process.env.MONGODB_URI_VECTOR;
 const DEFAULT_DELAY_MS = 2000; // Reduced delay since we are not using LLM for chunking
 
@@ -50,7 +50,7 @@ const projectSchema = new mongoose.Schema({
     settings: {},
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
-});
+}, { collection: 'Projects' });
 
 // 2. ProjectVector Schema (For Atlas DB)
 const projectVectorSchema = new mongoose.Schema({

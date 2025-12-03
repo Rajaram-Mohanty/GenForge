@@ -48,12 +48,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   }
-});
+}, { collection: 'Users' });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -64,12 +64,12 @@ userSchema.pre('save', async function(next) {
 });
 
 // Method to compare password
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
 // Encrypt and store API key
-userSchema.methods.setApiKey = function(plainApiKey) {
+userSchema.methods.setApiKey = function (plainApiKey) {
   if (!plainApiKey) {
     this.apiKeyEncrypted = null;
     return;
@@ -93,7 +93,7 @@ userSchema.methods.setApiKey = function(plainApiKey) {
 };
 
 // Decrypt stored API key
-userSchema.methods.getApiKey = function() {
+userSchema.methods.getApiKey = function () {
   if (!this.apiKeyEncrypted) return null;
 
   try {
@@ -116,7 +116,7 @@ userSchema.methods.getApiKey = function() {
 };
 
 // Method to get user without password and without raw API key
-userSchema.methods.toJSON = function() {
+userSchema.methods.toJSON = function () {
   const userObject = this.toObject();
   delete userObject.password;
   delete userObject.apiKeyEncrypted;

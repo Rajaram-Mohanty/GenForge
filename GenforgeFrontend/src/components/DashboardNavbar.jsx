@@ -7,20 +7,20 @@ const DashboardNavbar = ({ onMenuClick, onApiKeyClick }) => {
         <div className="options">
           <div className="nav-logo">
             <h3>
-              <Link to="/" style={{textDecoration: 'none', color: 'inherit'}}>
-                GenForge
+              <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+                Gen<span style={{ color: '#f97316' }}>Forge</span>
               </Link>
             </h3>
           </div>
-          <div className="nav-chats" onClick={onMenuClick} style={{cursor: 'pointer', marginLeft: '1rem', position: 'relative', top: '2.5px'}}>
+          <div className="nav-chats" onClick={onMenuClick} style={{ cursor: 'pointer', marginLeft: '1rem', position: 'relative', top: '2.5px' }}>
             <i className="fas fa-bars fa-lg"></i>
           </div>
         </div>
-        <div className="nav-api-key" onClick={onApiKeyClick} style={{cursor: 'pointer', marginLeft: '1rem', position: 'relative', top: '2.5px'}}>
+        <div className="nav-api-key" onClick={onApiKeyClick} style={{ cursor: 'pointer', marginLeft: '1rem', position: 'relative', top: '2.5px' }}>
           <i className="fas fa-key fa-lg"></i>
         </div>
       </div>
-    </nav>
+    </nav >
   )
 }
 

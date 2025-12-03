@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar'
 import HeroSection from '../components/HeroSection'
 import FeaturesSection from '../components/FeaturesSection'
 import CTASection from '../components/CTASection'
-import Footer from '../components/Footer'
+
 import '../styles/home.css'
 import '../styles/navbar.css'
 
@@ -17,7 +17,7 @@ const HomePage = () => {
       <HeroSection />
       <FeaturesSection />
       <CTASection />
-      <Footer />
+
     </div>
   )
 }

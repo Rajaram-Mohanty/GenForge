@@ -12,7 +12,7 @@ const LoginPage = () => {
   const handleSubmit = async (formData) => {
     setLoading(true)
     setError('')
-    
+
     try {
       const result = await login(formData.email, formData.password)
       if (result.success) {
@@ -39,7 +39,7 @@ const LoginPage = () => {
         <div className="bg-gradient-2"></div>
         <div className="bg-gradient-3"></div>
       </div>
-      
+
       <div className="auth-content">
         <div className="auth-header">
           <Link to="/" className="back-home">
@@ -47,13 +47,13 @@ const LoginPage = () => {
             Back to Home
           </Link>
         </div>
-        
+
         <div className="auth-card">
           <div className="auth-logo">
-            <h1><Link to="/" style={{textDecoration: 'none', color: 'inherit'}}>GenForge</Link></h1>
+            <h1><Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>Gen<span style={{ color: '#f97316' }}>Forge</span></Link></h1>
             <p>AI-Powered Development Platform</p>
           </div>
-          
+
           <AuthForm
             mode="login"
             onSubmit={handleSubmit}

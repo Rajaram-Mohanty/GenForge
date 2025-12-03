@@ -599,9 +599,8 @@ const RightPanel = ({ currentProject, width }) => {
             <button
               className={`preview-button ${isEditing ? 'primary' : 'secondary'}`}
               onClick={handleToggleEdit}
-              style={{ marginRight: '10px' }}
             >
-              <i className={`fas ${isEditing ? 'fa-save' : 'fa-edit'}`}></i>
+              <i className={`fas ${isEditing ? 'fa-save' : 'fa-pen'}`}></i>
               {isEditing ? 'Save' : 'Edit'}
             </button>
           )}
@@ -611,7 +610,7 @@ const RightPanel = ({ currentProject, width }) => {
             disabled={!currentProject?._id || isDownloading}
             title={currentProject?._id ? 'Download project as ZIP' : 'No project selected'}
           >
-            <i className="fas fa-download"></i>
+            <i className="fas fa-arrow-down-to-line"></i>
             {isDownloading ? 'Downloading...' : 'Download'}
           </button>
         </div>
