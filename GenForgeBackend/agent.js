@@ -137,8 +137,28 @@ async function runAgent(userProblem, apiKey) {
     try {
       // Implement Sliding Window: Keep only the last 20 messages to save resources
       // We always keep the system instruction (handled by config)
-      // We just need to slice the History array if it gets too big
-      const contextWindow = History.length > 20 ? History.slice(-20) : History;
+      let contextWindow = History;
+      if (History.length > 20) {
+        // Always keep the first message (User prompt) to maintain context
+        const firstMessage = History[0];
+
+        // Calculate slice index for the tail
+        // We want roughly the last 19 messages
+        let sliceIndex = History.length - 19;
+
+        // Ensure we start at an odd index (Model role) to keep pairs intact
+        // In this specific loop structure: 0=User, 1=Model, 2=User, 3=Model...
+        // Odd indices are Model (Function Call), Even indices are User (Function Response)
+        // We must not start with a Function Response (Even index > 0) without its Call
+        if (sliceIndex % 2 === 0) {
+          sliceIndex--;
+        }
+
+        // Ensure we don't go below 1 (since 0 is already handled)
+        if (sliceIndex < 1) sliceIndex = 1;
+
+        contextWindow = [firstMessage, ...History.slice(sliceIndex)];
+      }
 
       response = await ai.models.generateContent({
         model: "gemini-2.5-flash",

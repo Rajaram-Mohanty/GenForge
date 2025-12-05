@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
   const { checkAuthStatus } = useAuth()
   const [apiKey, setApiKey] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -133,19 +134,42 @@ const ApiKeyModal = ({ isOpen, onClose, mode = 'update', onApiKeySaved }) => {
               <i className="fas fa-external-link-alt"></i> Get Gemini Key
             </a>
           </div>
-          <input
-            type="text"
-            id="apiKeyInput"
-            placeholder="Enter your API key here..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            ref={inputRef}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && !loading && apiKey.trim()) {
-                handleSubmit(e)
-              }
-            }}
-          />
+          <div className="input-group" style={{ position: 'relative', marginBottom: '1.5rem' }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              id="apiKeyInput"
+              placeholder="Enter your API key here..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              ref={inputRef}
+              style={{ width: '100%', paddingRight: '40px', marginBottom: 0 }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !loading && apiKey.trim()) {
+                  handleSubmit(e)
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                padding: '5px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+            </button>
+          </div>
 
           {error && (
             <div className="error-message" style={{

@@ -19,12 +19,12 @@ import path from 'path';
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 
 // --- Configuration ---
-const LOCAL_MONGO_URI = process.env.MONGODB_URI;
-const ATLAS_MONGO_URI = process.env.MONGODB_URI_VECTOR;
+const RESOURCE_DB = process.env.RESOURCE_DB;
+const VECTOR_DB = process.env.VECTOR_DB;
 const DEFAULT_DELAY_MS = 2000; // Reduced delay since we are not using LLM for chunking
 
-if (!ATLAS_MONGO_URI) {
-    console.error("Error: MONGODB_URI_VECTOR is not defined in .env");
+if (!VECTOR_DB) {
+    console.error("Error: VECTOR_DB is not defined in .env");
     process.exit(1);
 }
 
@@ -84,12 +84,12 @@ let AtlasVectorModel;
 
 async function initConnections() {
     if (!localConn) {
-        localConn = await mongoose.createConnection(LOCAL_MONGO_URI).asPromise();
+        localConn = await mongoose.createConnection(RESOURCE_DB).asPromise();
         console.log("Connected to Local MongoDB");
         LocalProjectModel = localConn.model('Project', projectSchema);
     }
     if (!atlasConn) {
-        atlasConn = await mongoose.createConnection(ATLAS_MONGO_URI, { dbName: 'GenForge_VectorDB' }).asPromise();
+        atlasConn = await mongoose.createConnection(VECTOR_DB).asPromise();
         console.log("Connected to Atlas MongoDB (GenForge_VectorDB)");
         AtlasVectorModel = atlasConn.model('ProjectVector', projectVectorSchema);
     }

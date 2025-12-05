@@ -75,7 +75,7 @@ const htmlFiles = project.searchFiles('html');
 Create a `.env` file with the following variables:
 
 ```
-MONGODB_URI=mongodb://localhost:27017/genforge
+RESOURCE_DB=mongodb://localhost:27017/genforge
 SESSION_SECRET=your-session-secret-key-here
 PORT=3000
 NODE_ENV=development

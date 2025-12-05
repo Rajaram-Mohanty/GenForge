@@ -17,6 +17,7 @@ const RightPanel = ({ currentProject, width }) => {
   const [selectedHtmlFile, setSelectedHtmlFile] = useState(null)
   const [isDownloading, setIsDownloading] = useState(false)
   const editorRef = useRef(null)
+  const selectedFileRef = useRef(null)
 
   // Track if it's the initial load for the current project
   const lastProjectIdRef = useRef(null)
@@ -52,22 +53,28 @@ const RightPanel = ({ currentProject, width }) => {
             extension: firstFile.extension || `.${firstFile.type || firstFile.fileType || 'txt'}`
           }
           setSelectedFile(formattedFile)
+          selectedFileRef.current = formattedFile
           setEditorContent(formattedFile.content || '')
           setShowFileSidebar(true)
         }
         lastProjectIdRef.current = currentProject._id
       } else {
-        // If just updating content (e.g. after save), update the selected file's content in editor if needed
-        // But DON'T force sidebar open or change selected file
+        // If just updating content (e.g. after save or AI generation), update the selected file's content in editor
         if (selectedFile && files[selectedFile.path]) {
-          // Optional: update editor content if it changed externally? 
-          // For now, let's keep user's current view to avoid jumping
+          const newFile = files[selectedFile.path]
+          // If content is different, update editor and selected file
+          if (newFile.content !== editorContent) {
+            setEditorContent(newFile.content)
+            setSelectedFile(newFile)
+            selectedFileRef.current = newFile
+          }
         }
       }
     } else {
       // Reset when no project or no files
       setCurrentFiles({})
       setSelectedFile(null)
+      selectedFileRef.current = null
       setEditorContent('// Your code will appear here...')
       setShowFileSidebar(false)
       lastProjectIdRef.current = null
@@ -76,12 +83,13 @@ const RightPanel = ({ currentProject, width }) => {
 
   const handleEditorChange = (value) => {
     setEditorContent(value)
-    // Update local file cache immediately
-    if (selectedFile) {
+    // Update local file cache immediately using Ref to avoid stale closures
+    const currentFile = selectedFileRef.current
+    if (currentFile) {
       setCurrentFiles(prev => ({
         ...prev,
-        [selectedFile.path]: {
-          ...prev[selectedFile.path],
+        [currentFile.path]: {
+          ...prev[currentFile.path],
           content: value
         }
       }))
@@ -90,6 +98,7 @@ const RightPanel = ({ currentProject, width }) => {
 
   const handleFileSelect = (file) => {
     setSelectedFile(file)
+    selectedFileRef.current = file
     setEditorContent(file.content || '')
     // Update preview if in preview mode and it's an HTML file
     if (isPreviewMode && file.name.toLowerCase().endsWith('.html')) {
@@ -652,7 +661,9 @@ const RightPanel = ({ currentProject, width }) => {
         style={{ display: isPreviewMode ? 'none' : 'block' }}
       >
         <Editor
+          key={selectedFile?.path || selectedFile?.name || 'editor'}
           height="100%"
+          path={selectedFile?.path || selectedFile?.name}
           language={selectedFile ? getLanguageFromFileName(selectedFile.name) : 'plaintext'}
           value={editorContent}
           onChange={handleEditorChange}

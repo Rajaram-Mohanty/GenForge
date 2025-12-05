@@ -1,5 +1,6 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 import { apiService } from '../services/apiService'
+import { useAuth } from './AuthContext'
 
 const ProjectContext = createContext()
 
@@ -12,10 +13,19 @@ export const useProject = () => {
 }
 
 export const ProjectProvider = ({ children }) => {
+  const { user } = useAuth()
   const [projects, setProjects] = useState([])
   const [currentProject, setCurrentProject] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // Clear projects when user logs out
+  useEffect(() => {
+    if (!user) {
+      setProjects([])
+      setCurrentProject(null)
+    }
+  }, [user])
 
   const fetchProjects = async () => {
     try {

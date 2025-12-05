@@ -168,7 +168,7 @@ Create a `.env` file in the `GenForgeBackend` directory:
 ```env
 PORT=8080
 MONGO_URI=mongodb://localhost:27017/genforge
-MONGODB_URI_VECTOR=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/genforge
+VECTOR_DB=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/genforge
 GOOGLE_API_KEY=your_gemini_api_key
 SESSION_SECRET=your_secret_key
 CLIENT_ORIGIN=http://localhost:5173

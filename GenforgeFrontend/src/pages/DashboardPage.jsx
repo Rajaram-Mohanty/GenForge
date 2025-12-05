@@ -20,7 +20,7 @@ const DashboardPage = () => {
     fetchProject,
     setCurrentProject
   } = useProject()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
   const [showSidebar, setShowSidebar] = useState(false)
   const [showApiModal, setShowApiModal] = useState(false)
@@ -39,10 +39,22 @@ const DashboardPage = () => {
   }, [])
 
   // Check if user has API key on mount or when user changes
+  // Check if user has API key on mount or when user changes
   useEffect(() => {
-    if (user && !location.state?.showAddApiKey) {
+    // Wait for user data to be loaded
+    if (authLoading) return
+
+    // If navigated from signup/login with explicit instruction to show modal
+    if (location.state?.showAddApiKey && !hasCheckedApiKey) {
+      setApiModalMode('add')
+      setShowApiModal(true)
+      setHasCheckedApiKey(true)
+      return
+    }
+
+    if (user) {
       // If user doesn't have API key and modal is not already shown, show it
-      if (!user.hasApiKey && !showApiModal) {
+      if (!user.hasApiKey && !showApiModal && !hasCheckedApiKey) {
         setApiModalMode('add')
         setShowApiModal(true)
         setHasCheckedApiKey(true)
@@ -51,16 +63,9 @@ const DashboardPage = () => {
         setShowApiModal(false)
       }
     }
-  }, [user, location.state, showApiModal, apiModalMode])
+  }, [user, authLoading, location.state, showApiModal, apiModalMode, hasCheckedApiKey])
 
-  // When navigated from signup/login, show "Add API Key" modal once
-  useEffect(() => {
-    if (location.state && location.state.showAddApiKey) {
-      setApiModalMode('add')
-      setShowApiModal(true)
-      setHasCheckedApiKey(true) // Prevent duplicate check
-    }
-  }, [location.state])
+
 
   useEffect(() => {
     if (currentProject) {

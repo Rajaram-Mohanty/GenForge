@@ -12,11 +12,11 @@ let AtlasProjectVector = null;
 const getAtlasModel = async () => {
     if (AtlasProjectVector) return AtlasProjectVector;
 
-    const ATLAS_URI = process.env.MONGODB_URI_VECTOR;
-    if (!ATLAS_URI) throw new Error("MONGODB_URI_VECTOR is not defined");
+    const VECTOR_DB = process.env.VECTOR_DB;
+    if (!VECTOR_DB) throw new Error("VECTOR_DB is not defined");
 
     if (!atlasConn) {
-        atlasConn = await mongoose.createConnection(ATLAS_URI, { dbName: 'GenForge_VectorDB' }).asPromise();
+        atlasConn = await mongoose.createConnection(VECTOR_DB).asPromise();
         console.log("Connected to Atlas MongoDB (GenForge_VectorDB)");
     }
 

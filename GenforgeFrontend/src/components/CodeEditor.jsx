@@ -88,7 +88,7 @@ const CodeEditor = ({ file, onFileUpdate }) => {
           <span className="file-name">{file.filename}</span>
           {isModified && <span className="modified-indicator">●</span>}
         </div>
-        
+
         <div className="editor-actions">
           {isPreviewable(file.filename) && (
             <button
@@ -117,25 +117,26 @@ const CodeEditor = ({ file, onFileUpdate }) => {
           </button>
         </div>
       </div>
-      
+
       <div className="editor-content">
         {showPreview && isPreviewable(file.filename) ? (
           <div className="preview-container">
             <div className="preview-header">
               <span>Preview</span>
             </div>
-            <div 
+            <div
               className="preview-content"
-              dangerouslySetInnerHTML={{ 
-                __html: file.filename.endsWith('.md') ? 
-                  content.replace(/\n/g, '<br>') : 
-                  content 
+              dangerouslySetInnerHTML={{
+                __html: file.filename.endsWith('.md') ?
+                  content.replace(/\n/g, '<br>') :
+                  content
               }}
             />
           </div>
         ) : (
           <Editor
             height="100%"
+            path={file?.path || file?.filename}
             language={getLanguage(file.filename)}
             value={content}
             onChange={handleEditorChange}
