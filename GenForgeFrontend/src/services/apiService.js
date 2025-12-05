@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:8080'
+const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:8080' : ''
 
 // Create axios instance with default config
 const api = axios.create({
@@ -107,7 +107,7 @@ export const apiService = {
       const errorData = error.response?.data
       const errorMessage = errorData?.message || errorData?.error || 'Failed to generate project'
       const errorType = errorData?.error || 'GENERATION_ERROR'
-      
+
       // Create error with both type and message for proper handling
       const fullError = new Error(`${errorType}: ${errorMessage}`)
       fullError.errorType = errorType

@@ -29,7 +29,11 @@ app.use(bodyParser.json());
 
 // Enable CORS for React frontend
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  origin: [
+    'http://localhost:5173',
+    'https://genforge.onrender.com',
+    process.env.CLIENT_ORIGIN
+  ].filter(Boolean),
   credentials: true
 }));
 
