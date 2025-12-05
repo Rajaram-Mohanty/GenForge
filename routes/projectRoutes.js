@@ -7,7 +7,8 @@ import {
     addChatMessage,
     deleteProject,
     downloadProject,
-    updateFile
+    updateFile,
+    updateProjectCode
 } from '../controllers/projectController.js';
 
 const router = express.Router();
@@ -29,5 +30,6 @@ router.post('/project/:projectId/chat', requireAuth, addChatMessage);
 router.delete('/project/:projectId', requireAuth, deleteProject);
 router.get('/project/:projectId/download', requireAuth, downloadProject);
 router.post('/update-file/:projectId', requireAuth, updateFile);
+router.post('/chat/update-code', requireAuth, updateProjectCode);
 
 export default router;

@@ -515,3 +515,67 @@ export const updateFile = async (req, res) => {
         });
     }
 };
+
+export const updateProjectCode = async (req, res) => {
+    try {
+        const { projectId, prompt } = req.body;
+
+        if (!projectId || !prompt) {
+            return res.status(400).json({
+                success: false,
+                error: 'Project ID and prompt are required'
+            });
+        }
+
+        const project = await Project.findOne({
+            _id: projectId,
+            userId: req.session.userId
+        });
+
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                error: 'Project not found'
+            });
+        }
+
+        // Get API key
+        const user = await User.findById(req.session.userId);
+        let apiKeyToUse = null;
+        if (typeof user.getApiKey === 'function') {
+            apiKeyToUse = user.getApiKey();
+        }
+        if (!apiKeyToUse && req.session.apiKey) {
+            apiKeyToUse = req.session.apiKey;
+        }
+
+        if (!apiKeyToUse) {
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_API_KEY',
+                message: 'No API key configured.'
+            });
+        }
+
+        // Use RAG service to update code
+        const result = await ragService.updateCodeWithRAG(projectId, prompt, apiKeyToUse);
+
+        // Add chat messages
+        await project.addChatMessage('user', prompt);
+        await project.addChatMessage('assistant', result.summary);
+
+        res.json({
+            success: true,
+            message: 'Project updated successfully',
+            summary: result.summary,
+            modifiedFiles: result.modifiedFiles
+        });
+
+    } catch (error) {
+        console.error('Update project code error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Failed to update project code'
+        });
+    }
+};

@@ -38,20 +38,20 @@ const getAtlasModel = async () => {
 };
 
 // Initialize Gemini API
-const getGenAI = () => {
-    if (!process.env.GOOGLE_API_KEY) {
-        throw new Error("GOOGLE_API_KEY is required");
+const getGenAI = (apiKey) => {
+    if (!apiKey) {
+        throw new Error("API Key is required");
     }
-    return new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+    return new GoogleGenAI({ apiKey: apiKey });
 };
 
 // Initialize Embeddings Model
-const getEmbeddingsModel = () => {
-    if (!process.env.GOOGLE_API_KEY) {
-        throw new Error("GOOGLE_API_KEY is required for embeddings");
+const getEmbeddingsModel = (apiKey) => {
+    if (!apiKey) {
+        throw new Error("API Key is required for embeddings");
     }
     return new GoogleGenerativeAIEmbeddings({
-        apiKey: process.env.GOOGLE_API_KEY,
+        apiKey: apiKey,
         modelName: "text-embedding-004"
     });
 };
@@ -60,33 +60,20 @@ const getEmbeddingsModel = () => {
  * Find relevant code chunks using vector search
  * @param {string} query - User's search query
  * @param {string} projectId - Project ID to search within
+ * @param {string} apiKey - User's API Key
  * @returns {Promise<Array>} - Array of relevant vector documents
  */
-export async function findRelevantCode(query, projectId) {
+export async function findRelevantCode(query, projectId, apiKey) {
     try {
         console.log(`ragService: Getting embeddings for query: "${query}"`);
-        const embeddingsModel = getEmbeddingsModel();
+        const embeddingsModel = getEmbeddingsModel(apiKey);
         const queryEmbedding = await embeddingsModel.embedQuery(query);
         console.log(`ragService: Embedding generated. Length: ${queryEmbedding.length}`);
 
         const VectorModel = await getAtlasModel();
         console.log(`ragService: Got Atlas model. Running vector search for project: ${projectId}`);
 
-        // DEBUG: Check if data exists and what format it is in
-        try {
-            const count = await VectorModel.countDocuments({ projectId: new mongoose.Types.ObjectId(projectId) });
-            console.log(`ragService: DEBUG - Standard count for ObjectId(${projectId}): ${count}`);
-
-            if (count === 0) {
-                const countStr = await VectorModel.countDocuments({ projectId: projectId.toString() });
-                console.log(`ragService: DEBUG - Standard count for String("${projectId}"): ${countStr}`);
-            }
-        } catch (err) {
-            console.error("ragService: DEBUG - Error checking counts:", err);
-        }
-
         // Using MongoDB Atlas Vector Search
-        // Note: We are trying "default" as the index name, which is standard.
         const searchPromise = VectorModel.aggregate([
             {
                 $vectorSearch: {
@@ -131,11 +118,12 @@ export async function findRelevantCode(query, projectId) {
  * Generate a code patch using LLM
  * @param {string} originalCode - The code block to be modified
  * @param {string} userPrompt - The user's instruction
+ * @param {string} apiKey - User's API Key
  * @returns {Promise<string>} - The new code block
  */
-export async function generatePatch(originalCode, userPrompt) {
+export async function generatePatch(originalCode, userPrompt, apiKey) {
     try {
-        const genAI = getGenAI();
+        const genAI = getGenAI(apiKey);
 
         const prompt = `
 You are an expert code editor.
@@ -197,8 +185,6 @@ export function applyPatch(fullContent, startLine, endLine, newCode) {
     const lines = fullContent.split('\n');
 
     // Convert 1-based to 0-based index
-    // startLine is inclusive, endLine is inclusive
-    // If startLine is undefined (e.g. whole file), handle gracefully
     if (!startLine || !endLine) {
         console.warn("Missing line numbers for patch, attempting fuzzy match or append (Not implemented, returning newCode)");
         return newCode; // Fallback: replace everything if we don't know where
@@ -210,9 +196,6 @@ export function applyPatch(fullContent, startLine, endLine, newCode) {
 
     console.log(`Patching lines ${startLine}-${endLine} (Indices ${startIndex}-${endIndex})`);
 
-    // Splice: Remove old lines, insert new code
-    // Note: newCode might be multiple lines, so we shouldn't just insert it as one array element
-    // unless we want it to be one line. Usually split it too.
     const newLines = newCode.split('\n');
 
     lines.splice(startIndex, deleteCount, ...newLines);
@@ -225,8 +208,9 @@ export function applyPatch(fullContent, startLine, endLine, newCode) {
  * @param {string} projectId 
  * @param {string} filePath 
  * @param {string} newContent 
+ * @param {string} apiKey - User's API Key
  */
-export async function reIndexFile(projectId, filePath, newContent) {
+export async function reIndexFile(projectId, filePath, newContent, apiKey) {
     try {
         console.log(`Re-indexing file: ${filePath}`);
 
@@ -238,7 +222,6 @@ export async function reIndexFile(projectId, filePath, newContent) {
         });
 
         // 2. Chunk the new content
-        // We need to determine language for splitter
         const ext = path.extname(filePath).toLowerCase();
         let language = null;
         if (['.js', '.jsx', '.ts', '.tsx'].includes(ext)) language = "js";
@@ -261,10 +244,9 @@ export async function reIndexFile(projectId, filePath, newContent) {
         const docs = await splitter.createDocuments([newContent]);
 
         // 3. Generate Embeddings
-        const embeddingsModel = getEmbeddingsModel();
+        const embeddingsModel = getEmbeddingsModel(apiKey);
         const texts = docs.map(d => d.pageContent);
 
-        // Batch embedding might be needed for large files, but for single file update it's likely fine
         const embeddings = await embeddingsModel.embedDocuments(texts);
 
         // 4. Store new vectors
@@ -286,7 +268,61 @@ export async function reIndexFile(projectId, filePath, newContent) {
 
     } catch (error) {
         console.error("Error in reIndexFile:", error);
-        // Don't throw here, we don't want to fail the user request if background indexing fails
-        // But we should log it.
+    }
+}
+
+/**
+ * Main function to handle code updates via RAG
+ * @param {string} projectId 
+ * @param {string} prompt 
+ * @param {string} apiKey 
+ * @returns {Promise<Object>}
+ */
+export async function updateCodeWithRAG(projectId, prompt, apiKey) {
+    try {
+        console.log(`Starting RAG update for project ${projectId} with prompt: "${prompt}"`);
+
+        // 1. Find relevant code
+        const relevantChunks = await findRelevantCode(prompt, projectId, apiKey);
+
+        if (!relevantChunks || relevantChunks.length === 0) {
+            return {
+                summary: "I couldn't find any relevant code to update based on your request.",
+                modifiedFiles: []
+            };
+        }
+
+        // For now, we'll just take the top result to avoid complex multi-file edits in one go
+        const bestChunk = relevantChunks[0];
+        console.log(`Best chunk found: ${bestChunk.filePath} (Score: ${bestChunk.score})`);
+
+        // 2. Generate Patch
+        const newCode = await generatePatch(bestChunk.content, prompt, apiKey);
+
+        // 3. Apply Patch to File
+        // We need the full file content first
+        const project = await Project.findById(projectId);
+        if (!project) throw new Error("Project not found");
+
+        const file = project.files.find(f => f.path === bestChunk.filePath);
+        if (!file) throw new Error(`File not found: ${bestChunk.filePath}`);
+
+        const updatedContent = applyPatch(file.content, bestChunk.startLine, bestChunk.endLine, newCode);
+
+        // 4. Save to Database
+        await project.updateFile(file._id, updatedContent);
+
+        // 5. Re-index the file
+        // We don't await this to keep response fast, but for reliability we should probably await
+        await reIndexFile(projectId, bestChunk.filePath, updatedContent, apiKey);
+
+        return {
+            summary: `I updated ${bestChunk.filePath} to address your request.`,
+            modifiedFiles: [bestChunk.filePath]
+        };
+
+    } catch (error) {
+        console.error("Error in updateCodeWithRAG:", error);
+        throw error;
     }
 }
