@@ -285,7 +285,7 @@ const DashboardPage = () => {
               </button>
             </div>
             <div className="prompt-examples">
-              <p>Try: "Create a todo app with React" or "Build a weather dashboard"</p>
+              <p>Design an interactive todo application or an elegant weather dashboard</p>
             </div>
           </div>
         </div>

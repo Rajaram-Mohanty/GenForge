@@ -1002,7 +1002,9 @@ body {
 
 /* Preview Container Styles */
 .preview-container {
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+    /* Important for nested flex scrolling */
     display: flex;
     flex-direction: column;
     background: var(--bg-primary);
