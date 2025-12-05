@@ -50,10 +50,10 @@ app.use('/api', projectRoutes);
 app.use('/api', userRoutes);
 
 // --- Serve Frontend (Vite build) ---
-app.use(express.static(path.join(__dirname, "frontend/dist")));
+app.use(express.static(path.join(__dirname, "GenForgeFrontend/dist")));
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend/dist/index.html"));
+  res.sendFile(path.join(__dirname, "GenForgeFrontend/dist/index.html"));
 });
 
 // Start server
