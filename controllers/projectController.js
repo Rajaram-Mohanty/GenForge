@@ -100,7 +100,7 @@ export const generateProject = async (req, res) => {
 
                     // Index the file for RAG
                     try {
-                        await ragService.reIndexFile(project._id, fileOp.path, fileOp.content);
+                        await ragService.reIndexFile(project._id, fileOp.path, fileOp.content, apiKeyToUse);
                         console.log(`🔍 Indexed file for RAG: ${fileOp.name}`);
                     } catch (indexErr) {
                         console.error(`❌ Failed to index file ${fileOp.name}:`, indexErr);
@@ -114,7 +114,7 @@ export const generateProject = async (req, res) => {
 
                     // Index the file for RAG
                     try {
-                        await ragService.reIndexFile(project._id, fileOp.path, fileOp.content);
+                        await ragService.reIndexFile(project._id, fileOp.path, fileOp.content, apiKeyToUse);
                         console.log(`🔍 Indexed file for RAG: ${fileOp.name}`);
                     } catch (indexErr) {
                         console.error(`❌ Failed to index file ${fileOp.name}:`, indexErr);
@@ -484,13 +484,26 @@ export const updateFile = async (req, res) => {
             // Update file content
             await project.updateFile(file._id, content);
 
+            // Resolve API key for re-indexing
+            const user = await User.findById(req.session.userId);
+            let apiKeyToUse = null;
+            if (user && typeof user.getApiKey === 'function') {
+                apiKeyToUse = user.getApiKey();
+            }
+            if (!apiKeyToUse && req.session.apiKey) {
+                apiKeyToUse = req.session.apiKey;
+            }
+
             // Re-index the file for RAG
-            try {
-                await ragService.reIndexFile(projectId, filePath, content);
-                console.log(`🔄 Re-indexed file after manual update: ${filePath}`);
-            } catch (reIndexError) {
-                console.error(`❌ Failed to re-index file ${filePath}:`, reIndexError);
-                // We don't fail the request if re-indexing fails, but we log it
+            if (apiKeyToUse) {
+                try {
+                    await ragService.reIndexFile(projectId, filePath, content, apiKeyToUse);
+                    console.log(`🔄 Re-indexed file after manual update: ${filePath}`);
+                } catch (reIndexError) {
+                    console.error(`❌ Failed to re-index file ${filePath}:`, reIndexError);
+                }
+            } else {
+                console.warn(`⚠️ Skipping re-indexing for ${filePath} due to missing API key`);
             }
 
             res.json({
