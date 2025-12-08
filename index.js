@@ -12,8 +12,10 @@ const platform = os.platform();
 
 const asyncExecute = promisify(exec);
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 const History = [];
-const ai = new GoogleGenAI({ apiKey: "AIzaSyDNRIR8Tk1DvqbzvYVEpiixgSDOTivvbik" });
+const ai = new GoogleGenAI({ apiKey: "AIzaSyDMt2LZzcfWO36DivTmkMMCRoXhIc0kD5g" });
 
 
 async function executeCommand({ command }) {
@@ -92,6 +94,7 @@ async function runAgent(userProblem) {
 
   while (true) {
 
+    await sleep(4000);
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: History,

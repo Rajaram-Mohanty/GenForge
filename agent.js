@@ -8,6 +8,8 @@ function createAIInstance(apiKey) {
   return new GoogleGenAI({ apiKey: apiKey });
 }
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 const executeCommandDeclaration = {
   name: "executeCommand",
   description: "Execute a single terminal/shell command. A command can be to create a folder, file, write on a file, edit the file or delete the file",
@@ -135,6 +137,7 @@ async function runAgent(userProblem, apiKey) {
   let response;
   while (true) {
     try {
+      await sleep(4000); // Rate limiting to avoid quota issues
       // Implement Sliding Window: Keep only the last 20 messages to save resources
       // We always keep the system instruction (handled by config)
       let contextWindow = History;
@@ -235,19 +238,25 @@ Unless the user specifies otherwise, follow this plan:
 Once all files are created and validated, your final response MUST be a plain text message to the user, summarizing what you did and where the files are located. Do not call any more tools at this point.
 `,
           tools: [{
-            functionDeclarations: [executeCommandDeclaration]
+            functionDeclarations: [executeCommandDeclaration] 
           }],
         },
       });
     } catch (error) {
       // Handle API errors
-      if (error.message && error.message.includes('quota') || error.message.includes('429')) {
-        throw new Error('API_QUOTA_EXCEEDED');
+      if (error.message && (error.message.includes('quota') || error.message.includes('429'))) {
+        console.warn('⚠️ API Quota Exceeded. Stopping generation and saving partial progress.');
+        messages.push("⚠️ API Quota Exceeded. Generation stopped. Saving partial progress...");
+        break; // Exit loop gracefully to return what we have so far
       } else if (error.message && error.message.includes('API key')) {
         throw new Error('INVALID_API_KEY');
       } else {
         throw new Error(`API_ERROR: ${error.message}`);
       }
+    }
+
+    if (!response) {
+      break;
     }
 
     if (response.functionCalls && response.functionCalls.length > 0) {
