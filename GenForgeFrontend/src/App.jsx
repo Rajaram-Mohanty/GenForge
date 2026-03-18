@@ -1,38 +1,36 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
-import { ProjectProvider } from './contexts/ProjectContext'
-import HomePage from './pages/HomePage'
-import LoginPage from './pages/LoginPage'
-import SignupPage from './pages/SignupPage'
-import DashboardPage from './pages/DashboardPage'
-import ProtectedRoute from './components/ProtectedRoute'
-import './App.css'
-import './styles/auth.css'
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ProjectProvider } from "./contexts/ProjectContext";
+import HomePage from "./pages/HomePage";
+import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
+import DashboardPage from "./pages/DashboardPage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
-    <AuthProvider>
-      <ProjectProvider>
-        <Router>
-          <div className="App">
+    <Router>
+      <AuthProvider>
+        <ProjectProvider>
+          <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
-              <Route 
-                path="/dashboard" 
+              <Route
+                path="/dashboard"
                 element={
                   <ProtectedRoute>
                     <DashboardPage />
                   </ProtectedRoute>
-                } 
+                }
               />
             </Routes>
           </div>
-        </Router>
-      </ProjectProvider>
-    </AuthProvider>
-  )
+        </ProjectProvider>
+      </AuthProvider>
+    </Router>
+  );
 }
 
-export default App
+export default App;

@@ -198,6 +198,9 @@ projectSchema.index({ userId: 1, createdAt: -1 });
 projectSchema.index({ userId: 1, status: 1 });
 projectSchema.index({ 'files.filename': 1 });
 
+// Export schema for use in other connections (like RAG ingestion)
+export { projectSchema };
+
 const Project = mongoose.model('Project', projectSchema);
 
 export default Project;

@@ -1,7 +1,8 @@
-import { GoogleGenAI } from '@google/genai';
+import { ChatOpenAI } from "@langchain/openai";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { Project } from '../models/index.js';
+import { projectVectorSchema } from '../models/ProjectVector.js';
 import mongoose from 'mongoose';
 import path from 'path';
 
@@ -20,29 +21,29 @@ const getAtlasModel = async () => {
         console.log("Connected to Atlas MongoDB (GenForge_VectorDB)");
     }
 
-    // Define schema here or import it. Since we need it bound to this connection:
-    const projectVectorSchema = new mongoose.Schema({
-        projectId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
-        type: { type: String, enum: ['function', 'class', 'component', 'file', 'chunk', 'other'], required: true },
-        name: { type: String, required: true },
-        content: { type: String, required: true },
-        embedding: { type: [Number], required: true },
-        filePath: { type: String, required: true },
-        startLine: Number,
-        endLine: Number,
-        createdAt: { type: Date, default: Date.now }
-    }, { collection: 'Projects' });
-
+    // Use imported schema
     AtlasProjectVector = atlasConn.model('ProjectVector', projectVectorSchema);
     return AtlasProjectVector;
 };
 
-// Initialize Gemini API
-const getGenAI = (apiKey) => {
+// Initialize LLM for Patch Generation
+const getLLM = (apiKey) => {
     if (!apiKey) {
         throw new Error("API Key is required");
     }
-    return new GoogleGenAI({ apiKey: apiKey });
+    return new ChatOpenAI({
+        modelName: process.env.MODEL_NAME || "google/gemini-2.5-flash",
+        apiKey: apiKey,
+        maxTokens: 4000,
+        configuration: {
+            baseURL: "https://openrouter.ai/api/v1",
+            defaultHeaders: {
+                "HTTP-Referer": "https://genforge.com",
+                "X-Title": "GenForge RAG Task",
+            }
+        },
+        temperature: 0,
+    });
 };
 
 // Initialize Embeddings Model
@@ -123,7 +124,7 @@ export async function findRelevantCode(query, projectId, apiKey) {
  */
 export async function generatePatch(originalCode, userPrompt, apiKey) {
     try {
-        const genAI = getGenAI(apiKey);
+        const llm = getLLM(apiKey);
 
         const prompt = `
 You are an expert code editor.
@@ -142,16 +143,8 @@ Rules:
 4. Do not add comments unless requested.
 `;
 
-        // Using the SDK pattern from server.js
-        const response = await genAI.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: [{
-                role: 'user',
-                parts: [{ text: prompt }]
-            }]
-        });
-
-        let text = response.text;
+        const response = await llm.invoke(prompt);
+        let text = response.content;
         if (!text && response.response && typeof response.response.text === 'function') {
             text = response.response.text();
         } else if (!text && response.candidates && response.candidates[0] && response.candidates[0].content) {

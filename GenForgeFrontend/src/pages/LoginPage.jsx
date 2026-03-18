@@ -1,57 +1,66 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import AuthForm from '../components/AuthForm'
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import AuthForm from "../components/AuthForm";
 
 const LoginPage = () => {
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
-  const navigate = useNavigate()
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (formData) => {
-    setLoading(true)
-    setError('')
+    setLoading(true);
+    setError("");
 
     try {
-      const result = await login(formData.email, formData.password)
+      const result = await login(formData.email, formData.password);
       if (result.success) {
         // If user doesn't have an API key, show the Add API Key modal
         if (!result.hasApiKey) {
-          navigate('/dashboard', { state: { showAddApiKey: true } })
+          navigate("/dashboard", { state: { showAddApiKey: true } });
         } else {
-          navigate('/dashboard')
+          navigate("/dashboard");
         }
       } else {
-        setError(result.error)
+        setError(result.error);
       }
     } catch (error) {
-      setError(error.message)
+      setError(error.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="auth-page">
-      <div className="auth-background">
-        <div className="bg-gradient-1"></div>
-        <div className="bg-gradient-2"></div>
-        <div className="bg-gradient-3"></div>
-      </div>
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 blur-[100px] rounded-full"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-orange-500/20 blur-[100px] rounded-full"></div>
 
-      <div className="auth-content">
-        <div className="auth-header">
-          <Link to="/" className="back-home">
+      <div className="relative z-10 w-full max-w-md px-6">
+        <div className="mb-8">
+          <Link
+            to="/"
+            className="text-gray-400 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium"
+          >
             <i className="fas fa-arrow-left"></i>
             Back to Home
           </Link>
         </div>
 
-        <div className="auth-card">
-          <div className="auth-logo">
-            <h1><Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>Gen<span style={{ color: '#f97316' }}>Forge</span></Link></h1>
-            <p>AI-Powered Development Platform</p>
+        <div className="bg-gray-800/80 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-orange-500"></div>
+
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold tracking-tight text-white mb-2">
+              <Link to="/" className="hover:opacity-80 transition-opacity">
+                Gen<span className="text-orange-500">Forge</span>
+              </Link>
+            </h1>
+            <p className="text-gray-400 text-sm">
+              AI-Powered Development Platform
+            </p>
           </div>
 
           <AuthForm
@@ -63,7 +72,7 @@ const LoginPage = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default LoginPage
+export default LoginPage;

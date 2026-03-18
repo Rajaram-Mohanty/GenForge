@@ -44,61 +44,76 @@ export const ProjectProvider = ({ children }) => {
     }
   }
 
-  const createProject = async (prompt) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const response = await apiService.generateProject(prompt)
-      if (response.success) {
-        // After creating, fetch the full project data to get files and chats
-        const projectId = response.databaseProjectId
-        if (projectId) {
-          // Fetch the complete project data
-          const projectData = await apiService.getProjectData(projectId)
-          if (projectData.success && projectData.projectStructure) {
-            const projectStructure = projectData.projectStructure
-            const formattedProject = {
-              _id: projectStructure.id,
-              name: projectStructure.projectInfo?.name || `Project ${new Date().toLocaleDateString()}`,
-              description: projectStructure.projectInfo?.description || prompt,
-              projectType: projectStructure.projectInfo?.projectType || 'web-app',
-              status: projectStructure.projectInfo?.status || 'active',
-              createdAt: projectStructure.createdAt || new Date(),
-              updatedAt: projectStructure.projectInfo?.updatedAt || new Date(),
-              files: projectStructure.files || [],
-              chats: projectStructure.chats || []
+  const createProject = async (prompt, onProgress) => {
+    setLoading(true)
+    setError(null)
+    
+    return new Promise((resolve) => {
+      // Stream handler
+      const stopStream = apiService.generateProjectStream(
+        prompt, 
+        (data) => {
+          if (onProgress) onProgress(data)
+        },
+        (error) => {
+          // Preserve error type and message for proper error handling
+          const errorMessage = error.errorMessage || error.message || 'Failed to generate project'
+          const errorType = error.errorType || (error.message?.includes(':') ? error.message.split(':')[0] : 'GENERATION_ERROR')
+          const fullError = `${errorType}: ${errorMessage}`
+          setError(fullError)
+          setLoading(false)
+          resolve({ success: false, error: fullError })
+        },
+        async (response) => {
+          // Complete handler
+          const projectId = response.databaseProjectId
+          
+          if (projectId) {
+            try {
+              // Fetch the complete project data
+              const projectData = await apiService.getProjectData(projectId)
+              if (projectData.success && projectData.projectStructure) {
+                const projectStructure = projectData.projectStructure
+                const formattedProject = {
+                  _id: projectStructure.id,
+                  name: projectStructure.projectInfo?.name || `Project ${new Date().toLocaleDateString()}`,
+                  description: projectStructure.projectInfo?.description || prompt,
+                  projectType: projectStructure.projectInfo?.projectType || 'web-app',
+                  status: projectStructure.projectInfo?.status || 'active',
+                  createdAt: projectStructure.createdAt || new Date(),
+                  updatedAt: projectStructure.projectInfo?.updatedAt || new Date(),
+                  files: projectStructure.files || [],
+                  chats: projectStructure.chats || []
+                }
+                setProjects(prev => [formattedProject, ...prev])
+                setCurrentProject(formattedProject)
+                setLoading(false)
+                resolve({ success: true, project: formattedProject })
+                return
+              }
+            } catch (err) {
+              console.error('Error fetching project data after stream:', err)
             }
-            setProjects(prev => [formattedProject, ...prev])
-            setCurrentProject(formattedProject)
-            return { success: true, project: formattedProject }
           }
+          
+          // Fallback if project data fetch fails or projectId missing
+          const newProject = {
+            _id: response.databaseProjectId,
+            name: `Project ${new Date().toLocaleDateString()}`,
+            description: prompt,
+            projectType: 'web-app',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            files: [],
+            chats: []
+          }
+          setProjects(prev => [newProject, ...prev])
+          setCurrentProject(newProject)
+          setLoading(false)
+          resolve({ success: true, project: newProject })
         }
-        // Fallback if project data fetch fails
-        const newProject = {
-          _id: response.databaseProjectId,
-          name: `Project ${new Date().toLocaleDateString()}`,
-          description: prompt,
-          projectType: 'web-app',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          files: [],
-          chats: []
-        }
-        setProjects(prev => [newProject, ...prev])
-        setCurrentProject(newProject)
-        return { success: true, project: newProject }
-      }
-      return { success: false, error: response.error || response.message }
-    } catch (error) {
-      // Preserve error type and message for proper error handling
-      const errorMessage = error.errorMessage || error.message || 'Failed to generate project'
-      const errorType = error.errorType || (error.message?.includes(':') ? error.message.split(':')[0] : 'GENERATION_ERROR')
-      const fullError = `${errorType}: ${errorMessage}`
-      setError(fullError)
-      return { success: false, error: fullError }
-    } finally {
-      setLoading(false)
-    }
+      )
+    })
   }
 
   const updateProject = async (projectId, prompt) => {

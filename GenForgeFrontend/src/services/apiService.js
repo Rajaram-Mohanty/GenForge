@@ -116,6 +116,59 @@ export const apiService = {
     }
   },
 
+  generateProjectStream: (prompt, onMessage, onError, onComplete) => {
+    const url = `${API_BASE_URL}/api/generate-prompt-stream?prompt=${encodeURIComponent(prompt)}`;
+    const eventSource = new EventSource(url, { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'connected') {
+            // Connection established
+        } else {
+             onMessage(data);
+        }
+      } catch (e) {
+        console.error('Error parsing SSE data:', e);
+      }
+    };
+
+    eventSource.addEventListener('complete', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        eventSource.close();
+        onComplete(data);
+      } catch (e) {
+        console.error('Error parsing complete event:', e);
+        eventSource.close();
+        onError(e);
+      }
+    });
+
+    eventSource.addEventListener('error', (event) => {
+        // If data is available in the error event (custom error event from server)
+        if (event.data) {
+             try {
+                const data = JSON.parse(event.data);
+                eventSource.close();
+                onError(new Error(data.error || 'Stream error'));
+             } catch(e) {
+                 eventSource.close();
+                 onError(new Error('Stream error'));
+             }
+        } else {
+             // Browser connection error
+             console.error('EventSource connection error:', event);
+             eventSource.close();
+             // onError(new Error('Connection lost')); // Optional: decide if we want to bubble this up
+        }
+    });
+    
+    return () => {
+        eventSource.close();
+    };
+  },
+
   updateProjectCode: async (projectId, prompt) => {
     try {
       const response = await api.post('/api/chat/update-code', {

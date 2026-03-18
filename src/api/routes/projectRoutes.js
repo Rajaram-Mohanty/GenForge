@@ -1,6 +1,7 @@
 import express from 'express';
 import {
     generateProject,
+    streamGenerateProject,
     getProjects,
     getProject,
     getProjectData,
@@ -23,6 +24,7 @@ const requireAuth = (req, res, next) => {
 };
 
 router.post('/generate-prompt', requireAuth, generateProject);
+router.get('/generate-prompt-stream', requireAuth, streamGenerateProject);
 router.get('/projects', requireAuth, getProjects);
 router.get('/project/:projectId', requireAuth, getProject);
 router.get('/project-data/:projectId', requireAuth, getProjectData);

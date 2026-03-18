@@ -5,10 +5,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env from project root (one level up from services)
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// Load .env from project root (three levels up from agents/workflows)
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 import mongoose from 'mongoose';
-import { z } from "zod";
+import { projectSchema } from '../../models/Project.js';
+import { projectVectorSchema } from '../../models/ProjectVector.js';
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage } from "@langchain/core/messages";
 import { StateGraph, END } from "@langchain/langgraph";
@@ -28,53 +29,9 @@ if (!VECTOR_DB) {
     process.exit(1);
 }
 
-// --- Schemas ---
 
-// 1. Project Schema (For Local DB)
-const fileSchema = new mongoose.Schema({
-    name: String,
-    content: String,
-    language: String,
-    extension: String,
-    path: String,
-    fileType: { type: String, default: 'text' },
-    filename: String
-});
+// --- Connections using imported schemas ---
 
-const projectSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    description: String,
-    userId: mongoose.Schema.Types.ObjectId,
-    files: [fileSchema],
-    chats: [],
-    settings: {},
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-}, { collection: 'Projects' });
-
-// 2. ProjectVector Schema (For Atlas DB)
-const projectVectorSchema = new mongoose.Schema({
-    projectId: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: true,
-        index: true
-    },
-    type: {
-        type: String,
-        enum: ['function', 'class', 'component', 'file', 'chunk', 'other'],
-        required: true
-    },
-    name: { type: String, required: true },
-    content: { type: String, required: true },
-    embedding: {
-        type: [Number], // 768 dimensions
-        required: true
-    },
-    filePath: { type: String, required: true },
-    startLine: Number,
-    endLine: Number,
-    createdAt: { type: Date, default: Date.now }
-}, { collection: 'Projects' });
 
 // --- Database Connections ---
 let localConn;

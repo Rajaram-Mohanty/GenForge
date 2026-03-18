@@ -1,11 +1,23 @@
-import { GoogleGenAI } from "@google/genai";
+import { ChatOpenAI } from "@langchain/openai";
 import os from 'os';
 
 const platform = os.platform();
 
-// Function to create AI instance with provided API key
+// Function to create AI instance (adapter for existing calling code)
 function createAIInstance(apiKey) {
-  return new GoogleGenAI({ apiKey: apiKey });
+  return new ChatOpenAI({
+    modelName: "google/gemini-2.5-flash",
+    apiKey: apiKey,
+    maxTokens: 4000,
+    configuration: {
+      baseURL: "https://openrouter.ai/api/v1",
+      defaultHeaders: {
+        "HTTP-Referer": "https://genforge.com",
+        "X-Title": "GenForge Agent",
+      }
+    },
+    temperature: 0,
+  });
 }
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -25,7 +37,7 @@ const executeCommandDeclaration = {
   }
 }
 
-async function runAgent(userProblem, apiKey) {
+async function runAgent(userProblem, apiKey, onProgress = null) {
   // Initialize local state for this specific request
   // This ensures no data leaks between different requests/users
   const History = [];
@@ -40,25 +52,35 @@ async function runAgent(userProblem, apiKey) {
         const dirMatch = command.match(/mkdir\s+(.+)/);
         if (dirMatch) {
           const dirName = dirMatch[1];
-          fileOperations.push({
+          const op = {
             type: 'create_directory',
             name: dirName,
             path: dirName
-          });
-          messages.push(`📁 Creating directory: ${dirName}`);
+          };
+          fileOperations.push(op);
+          if (onProgress) onProgress({ type: 'file', payload: op });
+          
+          const msg = `📁 Creating directory: ${dirName}`;
+          messages.push(msg);
+          if (onProgress) onProgress({ type: 'message', text: msg });
         }
         return `Success: Directory ${dirMatch ? dirMatch[1] : 'unknown'} would be created`;
       } else if (command.includes('touch') || command.includes('New-Item')) {
         const fileMatch = command.match(/(?:touch|New-Item.*-Path)\s+(.+)/);
         if (fileMatch) {
           const fileName = fileMatch[1].replace(/['"]/g, '');
-          fileOperations.push({
+          const op = {
             type: 'create_file',
             name: fileName,
             path: fileName,
             content: ''
-          });
-          messages.push(`📄 Creating file: ${fileName}`);
+          };
+          fileOperations.push(op);
+          if (onProgress) onProgress({ type: 'file', payload: op });
+
+          const msg = `📄 Creating file: ${fileName}`;
+          messages.push(msg);
+          if (onProgress) onProgress({ type: 'message', text: msg });
         }
         return `Success: File ${fileMatch ? fileMatch[1].replace(/['"]/g, '') : 'unknown'} would be created`;
       } else if (command.includes('cat <<') || command.includes('Set-Content')) {
@@ -91,13 +113,18 @@ async function runAgent(userProblem, apiKey) {
         }
 
         if (fileName && content) {
-          fileOperations.push({
+          const op = {
             type: 'write_file',
             name: fileName,
             path: fileName,
             content: content
-          });
-          messages.push(`✏️ Writing content to: ${fileName}`);
+          };
+          fileOperations.push(op);
+          if (onProgress) onProgress({ type: 'file', payload: op });
+
+          const msg = `✏️ Writing content to: ${fileName}`;
+          messages.push(msg);
+          if (onProgress) onProgress({ type: 'message', text: msg });
         }
         return `Success: Content would be written to ${fileName || 'unknown file'}`;
       } else if (command.includes('cat ') && !command.includes('cat <<')) {
@@ -105,12 +132,16 @@ async function runAgent(userProblem, apiKey) {
         const fileMatch = command.match(/cat\s+(.+)/);
         if (fileMatch) {
           const fileName = fileMatch[1];
-          messages.push(`📖 Reading file: ${fileName}`);
+          const msg = `📖 Reading file: ${fileName}`;
+          messages.push(msg);
+          if (onProgress) onProgress({ type: 'message', text: msg });
         }
         return `Success: File ${fileMatch ? fileMatch[1] : 'unknown'} would be read`;
       } else if (command.includes('ls') || command.includes('dir')) {
         // Handle directory listing commands
-        messages.push(`📋 Listing directory contents`);
+        const msg = `📋 Listing directory contents`;
+        messages.push(msg);
+        if (onProgress) onProgress({ type: 'message', text: msg });
         return `Success: Directory contents would be listed`;
       }
 
@@ -246,7 +277,9 @@ Once all files are created and validated, your final response MUST be a plain te
       // Handle API errors
       if (error.message && (error.message.includes('quota') || error.message.includes('429'))) {
         console.warn('⚠️ API Quota Exceeded. Stopping generation and saving partial progress.');
-        messages.push("⚠️ API Quota Exceeded. Generation stopped. Saving partial progress...");
+        const msg = "⚠️ API Quota Exceeded. Generation stopped. Saving partial progress...";
+        messages.push(msg);
+        if (onProgress) onProgress({ type: 'error', text: msg });
         break; // Exit loop gracefully to return what we have so far
       } else if (error.message && error.message.includes('API key')) {
         throw new Error('INVALID_API_KEY');
@@ -265,6 +298,7 @@ Once all files are created and validated, your final response MUST be a plain te
 
       const funCall = availableTools[name];
 
+      // Execute tool (which might call onProgress internally if it adds messages/files)
       const result = await funCall(args);
 
       const functionResponsePart = {
@@ -298,6 +332,7 @@ Once all files are created and validated, your final response MUST be a plain te
       // Add final summary message
       const finalText = response.text || "Application generated successfully!";
       messages.push(finalText);
+      if (onProgress) onProgress({ type: 'message', text: finalText });
 
       History.push({
         role: 'model',
