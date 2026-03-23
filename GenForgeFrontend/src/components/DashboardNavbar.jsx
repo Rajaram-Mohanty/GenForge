@@ -1,38 +1,29 @@
 import { Link } from "react-router-dom";
 import Button from "@mui/material/Button";
 
-const DashboardNavbar = ({ onMenuClick, onApiKeyClick, onNewProject }) => {
+const DashboardNavbar = ({ onMenuClick, onApiKeyClick }) => {
   return (
     <nav className="w-full bg-gray-900 border-b border-gray-800 shadow-sm sticky top-0 z-50">
       <div className="flex h-16 items-center justify-between px-4 max-w-7xl mx-auto">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-4">
-            <h3 className="text-xl font-bold tracking-tight">
-              <button
-                onClick={onNewProject}
-                className="text-white hover:opacity-80 transition-opacity flex items-center gap-2"
-                title="Go to Home / New Project"
-              >
-                Gen<span className="text-orange-500">Forge</span>
-              </button>
-            </h3>
-
-            <button
-              onClick={onNewProject}
-              className="px-2.5 py-1 rounded-md border border-gray-700 text-gray-400 hover:text-white hover:border-blue-500 hover:bg-blue-500/10 transition-all flex items-center gap-1.5 text-xs font-semibold"
-              title="Start New Project"
-            >
-              <i className="fas fa-plus"></i>
-              New
-            </button>
-          </div>
+        <div className="flex items-center gap-3">
+          {/* Hamburger menu — opens ProjectSidebar */}
           <button
             onClick={onMenuClick}
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors border border-gray-800"
-            title="Toggle Sidebar / Project History"
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors"
+            title="Toggle Sidebar"
           >
-            <i className="fas fa-history"></i>
+            <i className="fas fa-bars fa-lg"></i>
           </button>
+
+          {/* App name — redirects to home */}
+          <h3 className="text-xl font-bold tracking-tight">
+            <Link
+              to="/"
+              className="text-white hover:opacity-80 transition-opacity"
+            >
+              Gen<span className="text-orange-500">Forge</span>
+            </Link>
+          </h3>
         </div>
 
         <Button

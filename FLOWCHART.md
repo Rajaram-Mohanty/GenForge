@@ -1,83 +1,86 @@
-# GenForge LangGraph Architecture
+# GenForge Project Flowcharts
 
-This flowchart replicates the system design provided in your reference image, mapped to the actual implementation in the codebase.
+This document describes the core logic of the GenForge application, focusing on the LangGraph-based node architecture for project generation, RAG-based updates, and manual saves.
+
+## 1. High-Level Flowchart (LangGraph Architecture)
 
 ```mermaid
-graph LR
-    %% Entry Point
-    Agent([Agent])
-
-    %% PATH 1: FIRST PROMPT (Generation & Ingestion)
-    Agent --- Path1
-    subgraph Path1 [First Prompt - Project Generation]
-        FP[First prompt] --> UP1[user prompt]
-        UP1 --> LLM1[llm]
-        LLM1 --> RES1[response]
-        RES1 -- "Chunk the response acc. to <br/> generated code blocks" --> Split1{ }
-
-        Split1 --> DB1[DB]
-        DB1 --> FE1[frontend]
-
-        Split1 --> VE1[vector embed]
-        VE1 --> VDB1[vDB]
+flowchart TD
+    %% ─────────────────────────────────────────────────────────────────────────────
+    %% PATH 1: FIRST PROMPT (GENERATION)
+    %% ─────────────────────────────────────────────────────────────────────────────
+    subgraph Path1 [First Prompt Generation & Ingestion]
+        P1Start([User Prompt]) --> P1Rec[receivePromptNode]
+        P1Rec --> P1Graph[[Inner StateGraph Loop]]
+        
+        subgraph P1Loop [callLLMNode: Agent Logic]
+            P1Agent[agentNode] <--> P1Tools[toolsNode: executeCommand]
+        end
+        
+        P1Graph --> P1Chunk[chunkResponseNode]
+        P1Chunk --> P1DB[(saveToDBNode: MongoDB)]
+        P1DB --> P1Embed[vectorEmbedNode: OpenRouter Embeddings]
+        P1Embed --> P1VDB[(saveToVDBNode: Atlas Vector Search)]
+        P1VDB --> P1Done([Project Created])
     end
 
-    %% PATH 2: SECOND PROMPT (RAG Update)
-    Agent --- Path2
-    subgraph Path2 [Second Prompt - RAG Update]
-        SP[Second Prompt] --> UP2[user Prompt]
-        UP2 --> UPE[user prompt embed]
-        UPE --> Search["Search in VDB and fetch the <br/> block of code from the normal DB"]
-        Search --> Augment["Augment the user prompt with <br/> the block of code fetch from normal DB"]
-        Augment --> LLM2[LLM]
-        LLM2 --> RES2[Response]
-
-        RES2 --> Split2{ }
-
-        Split2 --> UPD_DB["Update the block of <br/> DB which got updated"]
-        UPD_DB --> FE2[Show in the frontend]
-
-        Split2 --> E_RES[Embed the result]
-        E_RES --> UPD_VDB["Update the block of the <br/> VDB which was fetched"]
+    %% ─────────────────────────────────────────────────────────────────────────────
+    %% PATH 2: SECOND PROMPT (RAG UPDATE)
+    %% ─────────────────────────────────────────────────────────────────────────────
+    subgraph Path2 [Second Prompt RAG Update]
+        P2Start([User Request]) --> P2Rec[receivePromptNode]
+        P2Rec --> P2PromptEmbed[embedPromptNode: OpenRouter Embeddings]
+        P2PromptEmbed --> P2Search[searchVDBNode: Atlas Vector Search]
+        P2Search -- No Chunks found --> P2End([Short Circuit End])
+        P2Search -- Chunks found --> P2Aug[augmentPromptNode]
+        
+        P2Aug --> P2LLM[callLLMNode: OpenRouter LLM]
+        P2LLM --> P2Clean[chunkResponseNode: Strip Markdown]
+        P2Clean --> P2UpdateDB[(updateDBNode: Save to MongoDB)]
+        P2UpdateDB --> P2ResEmbed[embedResultNode: OpenRouter Embeddings]
+        P2ResEmbed --> P2UpdateVDB[(updateVDBNode: Replace Vectors)]
+        P2UpdateVDB --> P2UpdateDone([Project Updated])
     end
 
-    %% PATH 3: MANUAL EDIT (Monaco Editor Save)
-    Agent --- Path3
-    subgraph Path3 [Manual Editor Save - Direct Update]
-        Monaco[User Edit in Monaco] --> Save[Save Request]
-        Save --> DB_Upd[Update File in MongoDB]
-        DB_Upd --> ReIndex_Man["Re-index File (Chunk + Embed)"]
-        ReIndex_Man --> VDB_Upd[Update Vector DB]
-        VDB_Upd --> Sync[Sync UI Content]
+    %% ─────────────────────────────────────────────────────────────────────────────
+    %% PATH 3: MANUAL EDITOR SAVE
+    %% ─────────────────────────────────────────────────────────────────────────────
+    subgraph Path3 [Manual Editor Save]
+        P3Start([User Save in Monaco]) --> P3Rec[receiveEditNode]
+        P3Rec --> P3UpdateDB[(updateDBNode: Save to MongoDB)]
+        P3UpdateDB --> P3ReIndex[reIndexNode: Chunks & OpenRouter Embeddings]
+        P3ReIndex --> P3UpdateVDB[(updateVDBNode: Replace Vectors)]
+        P3UpdateVDB --> P3Sync[syncUINode]
+        P3Sync --> P3SaveDone([File Saved])
     end
 
-    %% Styles to mimic the image feel
-    style Agent fill:#333,stroke:#fff,stroke-width:2px,color:#fff
-    style Path1 fill:transparent,stroke:#555,stroke-dasharray: 5 5
-    style Path2 fill:transparent,stroke:#555,stroke-dasharray: 5 5
-    style Path3 fill:transparent,stroke:#555,stroke-dasharray: 5 5
-    
-    %% Node styles
-    style FP fill:#222,stroke:#ccc,color:#fff
-    style LLM1 fill:#222,stroke:#ccc,color:#fff
-    style LLM2 fill:#222,stroke:#ccc,color:#fff
-    style RES1 fill:#222,stroke:#ccc,color:#fff
-    style RES2 fill:#222,stroke:#ccc,color:#fff
-    style Search fill:#222,stroke:#ccc,color:#fff
-    style Augment fill:#222,stroke:#ccc,color:#fff
-    style UPD_DB fill:#222,stroke:#ccc,color:#fff
-    style UPD_VDB fill:#222,stroke:#ccc,color:#fff
-    style Monaco fill:#222,stroke:#ccc,color:#fff
-    style Save fill:#222,stroke:#ccc,color:#fff
-    style DB_Upd fill:#222,stroke:#ccc,color:#fff
-    style ReIndex_Man fill:#222,stroke:#ccc,color:#fff
-    style VDB_Upd fill:#222,stroke:#ccc,color:#fff
+    %% Styling
+    style Path1 fill:#f0f7ff,stroke:#007bff
+    style Path2 fill:#fff5eb,stroke:#f97316
+    style Path3 fill:#f3f4f6,stroke:#6b7280
+    style P1Graph fill:#dbeafe,stroke:#3b82f6,stroke-width:2px
+    style P2Search fill:#ffedd5,stroke:#fb923c,stroke-width:2px
 ```
 
-## Mapping to Codebase
+## 2. Path 1 Detailed: Generation & Ingestion Logic
 
-- **Agent / First Prompt**: Handled by `src/agents/core/graphAgent.js` (LangGraph loop).
-- **Chunk / Vector Embed**: Handled by `src/services/projectService.js` and `src/services/ragService.js` (`reIndexFile`).
-- **Second Prompt / Search**: Handled by `src/services/ragService.js` (`findRelevantCode`).
-- **Augment / LLM Response**: Handled by `src/services/ragService.js` (`generatePatch`).
-- **Update DB / VDB**: Handled by `src/services/ragService.js` (`applyPatch` and `reIndexFile`).
+The Generation Path uses a **planning-execution agent loop**. It decomposes the user's high-level request into specific terminal commands (`mkdir`, `New-Item`, `Set-Content`). Once the generation is complete, the resulting files are persisted to MongoDB and indexed into Atlas Vector Search for future RAG operations.
+
+- **State Management**: Uses shared state channels via `sharedState.js`.
+- **Streaming**: Progress updates (folder creation, file writes) are streamed to the frontend via SSE.
+- **Tools**: The agent uses an `executeCommand` tool which simulates terminal output.
+
+## 3. Path 2 Detailed: RAG-based Code Update
+
+The RAG Path enables users to update existing projects using natural language. It leverages vector search to find relevant file chunks, provides those chunks to the LLM as context, and applies the resulting patches.
+
+- **Context Retrieval**: Uses `$vectorSearch` with Atlas to find the most relevant code blocks.
+- **Context Augmentation**: Builds a prompt combining the user's request with the retrieved code.
+- **Incremental Indexing**: Only nodes for the modified files are re-embedded and updated in the VDB.
+
+## 4. Path 3 Detailed: Manual Monaco Save
+
+When a user manually edits a file in the Monaco editor and hits save, this path ensures the vector database stays in sync with the database record.
+
+- **Direct Update**: Skips LLM involvement and updates MongoDB immediately.
+- **Automatic Re-indexing**: Re-chunks and re-embeds the updated content for accurate future RAG search.

@@ -18,7 +18,7 @@ const asyncExecute = promisify(exec);
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ⚠️ PLACE YOUR OPENROUTER API KEY HERE
-const OPENROUTER_API_KEY = "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"; 
+const OPENROUTER_API_KEY = "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"; 
 // Choose your model (e.g., "google/gemini-2.0-flash-001" or "anthropic/claude-3.5-sonnet")
 const MODEL_NAME = "google/gemini-2.5-flash";
 
@@ -40,12 +40,13 @@ const executeCommandTool = tool(
                 command.includes("@'") &&
                 command.includes("'@")
             ) {
-                const heredocMatch = command.match(/@'(.*?)'@/s);
-                const fileMatch = command.match(/Set-Content\s+-Path\s+"?(.+?)"?$/);
+                const heredocMatch = command.match(/@'([\s\S]*?)'@/);
+                const fileMatch = command.match(/Set-Content\s+-Path\s+"?(.+?)"?(\s+|;|$)/);
 
                 if (heredocMatch && fileMatch) {
                     const fileContent = heredocMatch[1];
                     const destPath = fileMatch[1].replace(/\\+/g, "\\");
+                    console.log(`✏️ [Heredoc Write]: Writing ${fileContent.length} bytes to ${destPath}`);
 
                     const tempFilePath = path.join(os.tmpdir(), `temp-${Date.now()}.txt`);
                     fs.writeFileSync(tempFilePath, fileContent, "utf8");
@@ -54,16 +55,25 @@ const executeCommandTool = tool(
 
                     const { stdout, stderr } = await asyncExecute(powershellCmd);
 
-                    if (stderr) return `Error: ${stderr}`;
-                    return `Success: ${stdout || "Wrote file using temp workaround"} || Task executed completely`;
+                    if (stderr) {
+                        console.error(`❌ PowerShell Error: ${stderr}`);
+                        return `Error: ${stderr}`;
+                    }
+                    console.log(`✅ File written successfully.`);
+                    return `Success: Wrote file using temp workaround || Task executed completely`;
                 }
             }
 
             // 🔁 Fallback: run the original command
             const { stdout, stderr } = await asyncExecute(command);
-            if (stderr) return `Error: ${stderr}`;
-            return `Success: ${stdout} || Task executed completely`;
+            if (stderr) {
+                console.error(`❌ Execution Error: ${stderr}`);
+                return `Error: ${stderr}`;
+            }
+            console.log(`✅ Command Result: ${stdout || "Success (no output)"}`);
+            return `Success: ${stdout || "Command executed successfully"} || Task executed completely`;
         } catch (error) {
+            console.error(`❌ Tool Error: ${error.message || error}`);
             return `Error: ${error.message || error}`;
         }
     },
@@ -218,17 +228,26 @@ async function runAgent(prompt) {
 
     for await (const chunk of stream) {
         const [nodeName, stateUpdate] = Object.entries(chunk)[0];
-        console.log(`--- [Node: ${nodeName}] ---`);
+        // console.log(`\n--- [Node: ${nodeName}] ---`); // Optional, keeps it cleaner
         
         if (stateUpdate.messages) {
             const lastMsg = stateUpdate.messages[stateUpdate.messages.length - 1];
-            if (lastMsg.content) {
-                console.log(lastMsg.content);
+            
+            // Log Agent Thought/Content
+            if (lastMsg instanceof AIMessage && lastMsg.content) {
+                console.log(`\n--- [Agent: Response] ---\n${lastMsg.content}\n`);
             }
-            if (lastMsg.tool_calls) {
+            
+            // Log Tool Calls
+            if (lastMsg.tool_calls && lastMsg.tool_calls.length > 0) {
                 lastMsg.tool_calls.forEach(tc => {
-                    console.log(`Tool Call: ${tc.name}(${JSON.stringify(tc.args)})`);
+                    console.log(`🔧 [Tool Call]: ${tc.name}(${JSON.stringify(tc.args)})`);
                 });
+            }
+
+            // Log Tool Outputs (results)
+            if (lastMsg instanceof ToolMessage) {
+                console.log(`✅ [Tool Response]: ${lastMsg.content}`);
             }
         }
     }
