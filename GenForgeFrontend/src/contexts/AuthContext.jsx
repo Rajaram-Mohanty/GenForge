@@ -56,6 +56,24 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
+  const googleLogin = async (credential) => {
+    try {
+      const response = await apiService.googleLogin(credential)
+      if (response.success) {
+        setUser(response.user)
+        setIsAuthenticated(true)
+        return { 
+          success: true, 
+          user: response.user,
+          hasApiKey: response.user?.hasApiKey ?? false
+        }
+      }
+      return { success: false, error: response.error }
+    } catch (error) {
+      return { success: false, error: error.message }
+    }
+  }
+
   const signup = async (name, email, password) => {
     try {
       const response = await apiService.signup(name, email, password)
@@ -90,6 +108,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     loading,
     login,
+    googleLogin,
     signup,
     logout,
     checkAuthStatus

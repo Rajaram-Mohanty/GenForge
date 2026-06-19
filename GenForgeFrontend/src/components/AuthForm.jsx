@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
+import { GoogleLogin } from '@react-oauth/google';
 
-const AuthForm = ({ mode, onSubmit, error, loading }) => {
+const AuthForm = ({ mode, onSubmit, error, loading, onGoogleLogin }) => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
-    remember: false,
   });
 
   const handleChange = (e) => {
@@ -52,10 +53,9 @@ const AuthForm = ({ mode, onSubmit, error, loading }) => {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-lg mb-6 flex items-center gap-3">
-          <i className="fas fa-exclamation-triangle"></i>
-          <p className="text-sm">{error}</p>
-        </div>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: '0.5rem' }}>
+          {error}
+        </Alert>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -123,17 +123,7 @@ const AuthForm = ({ mode, onSubmit, error, loading }) => {
         </div>
 
         {mode === "login" && (
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-              <input
-                type="checkbox"
-                name="remember"
-                checked={formData.remember}
-                onChange={handleChange}
-                className="w-4 h-4 rounded border-gray-700 bg-gray-900/50 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
-              />
-              Remember me
-            </label>
+          <div className="flex items-center justify-end">
             <a
               href="#"
               className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
@@ -187,39 +177,21 @@ const AuthForm = ({ mode, onSubmit, error, loading }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Button
-          variant="outlined"
-          sx={{
-            color: "#fff",
-            borderColor: "#374151",
-            textTransform: "none",
-            py: 1,
-            "&:hover": {
-              borderColor: "#4b5563",
-              backgroundColor: "rgba(255, 255, 255, 0.05)",
-            },
+      <div className="flex justify-center w-full">
+        <GoogleLogin
+          onSuccess={credentialResponse => {
+            if (onGoogleLogin) {
+              onGoogleLogin(credentialResponse.credential);
+            }
           }}
-          startIcon={<i className="fab fa-google"></i>}
-        >
-          Google
-        </Button>
-        <Button
-          variant="outlined"
-          sx={{
-            color: "#fff",
-            borderColor: "#374151",
-            textTransform: "none",
-            py: 1,
-            "&:hover": {
-              borderColor: "#4b5563",
-              backgroundColor: "rgba(255, 255, 255, 0.05)",
-            },
+          onError={() => {
+            console.error('Login Failed');
           }}
-          startIcon={<i className="fab fa-github"></i>}
-        >
-          GitHub
-        </Button>
+          theme="filled_black"
+          shape="rectangular"
+          text={mode === "login" ? "signin_with" : "signup_with"}
+          size="large"
+        />
       </div>
 
       <div className="mt-8 text-center text-sm text-gray-400">

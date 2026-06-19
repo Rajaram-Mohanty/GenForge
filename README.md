@@ -160,7 +160,7 @@ function applyLinePatch(fullContent, startLine, endLine, newCode) {
 -   Node.js (v18+)
 -   MongoDB (Document DB instance running on port 27017)
 -   MongoDB Atlas Account (for Vector DB)
--   Google Cloud API Key (with Gemini access)
+-   Google Cloud / OpenRouter API Key
 
 ### Environment Variables
 Create a `.env` file in the `GenForgeBackend` directory:
@@ -169,7 +169,7 @@ Create a `.env` file in the `GenForgeBackend` directory:
 PORT=8080
 MONGO_URI=mongodb://localhost:27017/genforge
 VECTOR_DB=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/genforge
-GOOGLE_API_KEY=your_gemini_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
 SESSION_SECRET=your_secret_key
 CLIENT_ORIGIN=http://localhost:5173
 ```

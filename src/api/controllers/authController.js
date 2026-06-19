@@ -1,4 +1,7 @@
 import { User } from '../../models/index.js';
+import { OAuth2Client } from 'google-auth-library';
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '1029199197940-02t7h0o5t6c11p1r0sjkc1p9e3tiv80l.apps.googleusercontent.com');
 
 export const login = async (req, res) => {
     try {
@@ -88,4 +91,56 @@ export const logout = (req, res) => {
         }
         res.json({ success: true });
     });
+};
+
+export const googleLogin = async (req, res) => {
+    try {
+        const { credential } = req.body;
+        const ticket = await client.verifyIdToken({
+            idToken: credential,
+            audience: process.env.GOOGLE_CLIENT_ID || '1029199197940-02t7h0o5t6c11p1r0sjkc1p9e3tiv80l.apps.googleusercontent.com',
+        });
+        const payload = ticket.getPayload();
+        const { sub, email, name } = payload;
+
+        let user = await User.findOne({ email: email });
+
+        if (!user) {
+            user = new User({
+                username: name || email.split('@')[0],
+                email: email,
+                authProvider: 'google',
+                googleId: sub
+            });
+            await user.save();
+        } else if (!user.googleId) {
+            user.googleId = sub;
+            user.authProvider = 'google';
+            await user.save();
+        }
+
+        user.lastLogin = new Date();
+        await user.save();
+
+        let userApiKey = null;
+        if (typeof user.getApiKey === 'function') {
+            userApiKey = user.getApiKey();
+        }
+
+        req.session.userId = user._id;
+        req.session.apiKey = userApiKey || null;
+
+        return res.json({
+            success: true,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                hasApiKey: !!userApiKey
+            }
+        });
+    } catch (error) {
+        console.error('Google login error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to authenticate with Google' });
+    }
 };

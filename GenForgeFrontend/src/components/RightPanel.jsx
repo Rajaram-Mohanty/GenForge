@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Editor } from "@monaco-editor/react";
 import { useProject } from "../contexts/ProjectContext";
 import { apiService } from "../services/apiService";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 const RightPanel = ({ currentProject, width }) => {
   const { updateFile } = useProject();
@@ -20,6 +22,13 @@ const RightPanel = ({ currentProject, width }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const editorRef = useRef(null);
   const selectedFileRef = useRef(null);
+
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const showSnackbar = (message, severity = "info") => setSnackbar({ open: true, message, severity });
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') return;
+    setSnackbar((prev) => ({ ...prev, open: false }));
+  };
 
   // Track if it's the initial load for the current project
   const lastProjectIdRef = useRef(null);
@@ -601,7 +610,7 @@ const RightPanel = ({ currentProject, width }) => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Project download error:", error);
-      alert(error.message || "Failed to download project");
+      showSnackbar(error.message || "Failed to download project", "error");
     } finally {
       setIsDownloading(false);
     }
@@ -620,14 +629,14 @@ const RightPanel = ({ currentProject, width }) => {
             editorContent,
           );
           if (response.success) {
-            alert("Saved successfully!");
+            showSnackbar("Saved successfully!", "success");
             setIsEditing(false);
           } else {
-            alert("Failed to save: " + response.error);
+            showSnackbar("Failed to save: " + response.error, "error");
           }
         } catch (error) {
           console.error("Error saving file:", error);
-          alert("Error saving file");
+          showSnackbar("Error saving file", "error");
         }
       }
     } else {
@@ -802,6 +811,17 @@ const RightPanel = ({ currentProject, width }) => {
 
         {renderPreview()}
       </div>
+
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };

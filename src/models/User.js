@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function() { return this.authProvider === 'local'; },
     minlength: 6
   },
   email: {
@@ -43,7 +43,17 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  // Encrypted Gemini API key for this user
+  authProvider: {
+    type: String,
+    enum: ['local', 'google'],
+    default: 'local'
+  },
+  googleId: {
+    type: String,
+    sparse: true,
+    unique: true
+  },
+  // Encrypted OpenRouter API key for this user
   apiKeyEncrypted: {
     type: String,
     default: null

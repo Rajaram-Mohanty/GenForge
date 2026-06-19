@@ -6,7 +6,7 @@ import AuthForm from "../components/AuthForm";
 const SignupPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signup } = useAuth();
+  const { signup, googleLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (formData) => {
@@ -22,6 +22,28 @@ const SignupPage = () => {
       if (result.success) {
         // After successful signup, navigate to dashboard and trigger Add API Key modal
         navigate("/dashboard", { state: { showAddApiKey: true } });
+      } else {
+        setError(result.error);
+      }
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async (credential) => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await googleLogin(credential);
+      if (result.success) {
+        if (!result.hasApiKey) {
+          navigate("/dashboard", { state: { showAddApiKey: true } });
+        } else {
+          navigate("/dashboard");
+        }
       } else {
         setError(result.error);
       }
@@ -66,6 +88,7 @@ const SignupPage = () => {
           <AuthForm
             mode="signup"
             onSubmit={handleSubmit}
+            onGoogleLogin={handleGoogleLogin}
             error={error}
             loading={loading}
           />

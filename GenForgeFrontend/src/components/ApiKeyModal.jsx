@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { apiService } from "../services/apiService";
 import { useAuth } from "../contexts/AuthContext";
 import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
 
 const ApiKeyModal = ({ isOpen, onClose, mode = "update", onApiKeySaved }) => {
   const { checkAuthStatus } = useAuth();
@@ -118,17 +119,17 @@ const ApiKeyModal = ({ isOpen, onClose, mode = "update", onApiKeySaved }) => {
         <div className="p-6 space-y-4">
           <p className="text-gray-300">
             {mode === "add"
-              ? "Please add your Gemini API key to start generating projects:"
-              : "Please enter your new Gemini API key:"}
+              ? "Please add your OpenRouter API key to start generating projects:"
+              : "Please enter your new OpenRouter API key:"}
           </p>
           <div>
             <a
-              href="https://aistudio.google.com/app/apikey"
+              href="https://openrouter.ai/workspaces/default/keys"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
             >
-              <i className="fas fa-external-link-alt"></i> Get Gemini Key
+              <i className="fas fa-external-link-alt"></i> Get OpenRouter Key
             </a>
           </div>
 
@@ -159,17 +160,15 @@ const ApiKeyModal = ({ isOpen, onClose, mode = "update", onApiKeySaved }) => {
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-              <i className="fas fa-exclamation-triangle flex-shrink-0"></i>
-              <span>{error}</span>
-            </div>
+            <Alert severity="error" sx={{ borderRadius: '0.5rem' }}>
+              {error}
+            </Alert>
           )}
 
           {success && (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-              <i className="fas fa-check-circle flex-shrink-0"></i>
-              <span>{success}</span>
-            </div>
+            <Alert severity="success" sx={{ borderRadius: '0.5rem' }}>
+              {success}
+            </Alert>
           )}
 
           <div className="flex justify-end gap-3 pt-4">

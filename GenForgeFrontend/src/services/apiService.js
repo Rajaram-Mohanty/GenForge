@@ -44,6 +44,15 @@ export const apiService = {
     }
   },
 
+  googleLogin: async (credential) => {
+    try {
+      const response = await api.post('/google', { credential })
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.error || 'Google login failed')
+    }
+  },
+
   signup: async (name, email, password) => {
     try {
       const response = await api.post('/signup', { name, email, password })

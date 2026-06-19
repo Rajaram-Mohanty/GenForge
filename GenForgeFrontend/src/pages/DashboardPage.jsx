@@ -9,6 +9,8 @@ import SplitContainer from "../components/SplitContainer";
 import { useProject } from "../contexts/ProjectContext";
 import { useAuth } from "../contexts/AuthContext";
 import Button from "@mui/material/Button";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 const DashboardPage = () => {
   const {
@@ -34,6 +36,13 @@ const DashboardPage = () => {
   const [tempMessages, setTempMessages] = useState([]);
   const [hasCheckedApiKey, setHasCheckedApiKey] = useState(false);
   const location = useLocation();
+
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const showSnackbar = (message, severity = "info") => setSnackbar({ open: true, message, severity });
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') return;
+    setSnackbar((prev) => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     fetchProjects();
@@ -208,11 +217,11 @@ const DashboardPage = () => {
         setShowSidebar(false);
       } else {
         console.error("Failed to load project:", res.error);
-        alert(`Failed to load project: ${res.error || "Unknown error"}`);
+        showSnackbar(`Failed to load project: ${res.error || "Unknown error"}`, "error");
       }
     } catch (error) {
       console.error("Error loading project:", error);
-      alert(`Error loading project: ${error.message || "Unknown error"}`);
+      showSnackbar(`Error loading project: ${error.message || "Unknown error"}`, "error");
     }
   };
 
@@ -366,6 +375,17 @@ const DashboardPage = () => {
           />
         )}
       </div>
+
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </div>
   );
 };

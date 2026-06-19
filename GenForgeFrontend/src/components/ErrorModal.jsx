@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import Button from "@mui/material/Button";
+import Alert from "@mui/material/Alert";
 
 const ErrorModal = ({ isOpen, error, onClose, onUpdateApiKey }) => {
   useEffect(() => {
@@ -72,11 +73,9 @@ const ErrorModal = ({ isOpen, error, onClose, onUpdateApiKey }) => {
         </div>
 
         <div className="p-6 space-y-6">
-          <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
-            <p className="text-gray-200 text-sm leading-relaxed" id="errorMessage">
-              {message}
-            </p>
-          </div>
+          <Alert severity="error" variant="outlined" sx={{ '& .MuiAlert-message': { color: '#e5e7eb', fontSize: '0.875rem' } }}>
+            {message}
+          </Alert>
 
           <div className="flex justify-end gap-3 pt-2">
             <Button

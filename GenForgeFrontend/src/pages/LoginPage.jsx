@@ -6,7 +6,7 @@ import AuthForm from "../components/AuthForm";
 const LoginPage = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (formData) => {
@@ -17,6 +17,28 @@ const LoginPage = () => {
       const result = await login(formData.email, formData.password);
       if (result.success) {
         // If user doesn't have an API key, show the Add API Key modal
+        if (!result.hasApiKey) {
+          navigate("/dashboard", { state: { showAddApiKey: true } });
+        } else {
+          navigate("/dashboard");
+        }
+      } else {
+        setError(result.error);
+      }
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async (credential) => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await googleLogin(credential);
+      if (result.success) {
         if (!result.hasApiKey) {
           navigate("/dashboard", { state: { showAddApiKey: true } });
         } else {
@@ -66,6 +88,7 @@ const LoginPage = () => {
           <AuthForm
             mode="login"
             onSubmit={handleSubmit}
+            onGoogleLogin={handleGoogleLogin}
             error={error}
             loading={loading}
           />
