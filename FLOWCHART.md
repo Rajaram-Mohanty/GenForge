@@ -54,12 +54,27 @@ flowchart TD
         P3Sync --> P3SaveDone([File Saved])
     end
 
-    %% Styling
-    style Path1 fill:#f0f7ff,stroke:#007bff
-    style Path2 fill:#fff5eb,stroke:#f97316
-    style Path3 fill:#f3f4f6,stroke:#6b7280
-    style P1Graph fill:#dbeafe,stroke:#3b82f6,stroke-width:2px
-    style P2Search fill:#ffedd5,stroke:#fb923c,stroke-width:2px
+    %% Vertical alignment using invisible links
+    Path1 ~~~ Path2
+    Path2 ~~~ Path3
+
+    %% Style Classes
+    classDef startEnd fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#14532d;
+    classDef process fill:#e0f2fe,stroke:#0369a1,stroke-width:2px,color:#0c4a6e;
+    classDef db fill:#f3e8ff,stroke:#7e22ce,stroke-width:2px,color:#581c87;
+    classDef agent fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#78350f;
+
+    %% Class Assignments
+    class P1Start,P1Done,P2Start,P2End,P2UpdateDone,P3Start,P3SaveDone startEnd;
+    class P1Rec,P1Chunk,P1Embed,P2Rec,P2PromptEmbed,P2Aug,P2Clean,P2ResEmbed,P3Rec,P3ReIndex,P3Sync process;
+    class P1DB,P1VDB,P2Search,P2UpdateDB,P2UpdateVDB,P3UpdateDB,P3UpdateVDB db;
+    class P1Graph,P1Agent,P1Tools,P2LLM agent;
+
+    %% Subgraph Styling
+    style Path1 fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a
+    style Path2 fill:#fffbeb,stroke:#d97706,stroke-width:2px,color:#78350f
+    style Path3 fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d
+    style P1Loop fill:#faf5ff,stroke:#8b5cf6,stroke-width:1px,color:#5b21b6
 ```
 
 ## 2. Path 1 Detailed: Generation & Ingestion Logic
